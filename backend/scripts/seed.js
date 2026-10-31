@@ -665,10 +665,12 @@ async function seedSales({ productsMap, plansMap }) {
   }
 }
 
-async function main() {
-  console.log('Connecting to MongoDB...');
-  await mongoose.connect(MONGO_URI);
-  console.log('Connected.');
+async function runSeed(shouldDisconnect = true) {
+  if (mongoose.connection.readyState === 0) {
+    console.log('Connecting to MongoDB...');
+    await mongoose.connect(MONGO_URI);
+    console.log('Connected.');
+  }
 
   await seedUsers();
   const catalog = await seedCatalog();
@@ -690,11 +692,17 @@ async function main() {
   }
   console.log('========================================\n');
 
-  await mongoose.disconnect();
+  if (shouldDisconnect) {
+    await mongoose.disconnect();
+  }
   console.log('Done.');
 }
 
-main().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  runSeed().catch((err) => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { runSeed };
