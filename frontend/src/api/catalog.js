@@ -37,3 +37,12 @@ export const discountsApi = {
   toggle: (id) => client.patch(`/discounts/${id}/toggle`),
   delete: (id) => client.delete(`/discounts/${id}`),
 };
+
+export const catalogApi = {
+  listPlans: (params) => plansApi.list(params),
+  getPlan: (id) => plansApi.get(id),
+  listProducts: (params) => productsApi.list(params),
+  getProduct: (id) => productsApi.get(id),
+  listTaxes: (params) => taxesApi.list(params),
+  listDiscounts: (params) => discountsApi.list(params),
+};

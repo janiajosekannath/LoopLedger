@@ -12,6 +12,12 @@ const taxRoutes = require('./routes/taxes');
 const productRoutes = require('./routes/products');
 const planRoutes = require('./routes/plans');
 const discountRoutes = require('./routes/discounts');
+const pricingRoutes = require('./routes/pricing');
+const historyRoutes = require('./routes/history');
+const templateRoutes = require('./routes/quotationTemplates');
+const quotationRoutes = require('./routes/quotations');
+const subscriptionRoutes = require('./routes/subscriptions');
+const paymentRoutes = require('./routes/payments');
 
 const app = express();
 
@@ -41,6 +47,12 @@ app.use('/api/taxes', taxRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/discounts', discountRoutes);
+app.use('/api/pricing', pricingRoutes);
+app.use('/api/history', historyRoutes);
+app.use('/api/quotation-templates', templateRoutes);
+app.use('/api/quotations', quotationRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

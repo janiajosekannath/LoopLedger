@@ -12,6 +12,15 @@ const Tax = require('../src/models/Tax');
 const { Product, ProductVariant } = require('../src/models/Product');
 const SubscriptionPlan = require('../src/models/SubscriptionPlan');
 const Discount = require('../src/models/Discount');
+const QuotationTemplate = require('../src/models/QuotationTemplate');
+const Quotation = require('../src/models/Quotation');
+const Subscription = require('../src/models/Subscription');
+const Invoice = require('../src/models/Invoice');
+const Payment = require('../src/models/Payment');
+const { StatusHistory, MrrChange } = require('../src/models/History');
+const { nextSequence } = require('../src/utils/sequence');
+const { quote } = require('../src/services/pricingEngine');
+const { calculateMrr } = require('../src/services/mrr');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/loopledger';
 
@@ -98,7 +107,7 @@ const DEMO_CUSTOMERS = [
 ];
 
 async function seedUsers() {
-  console.log('\n--- Seeding Users & Customers ---');
+  console.log('\n--- Seeding Users ---');
 
   // Admin
   const existingAdmin = await User.findOne({ email: DEMO_ADMIN.email });
@@ -150,103 +159,100 @@ async function seedUsers() {
         console.log(`Created customer: ${c.email}`);
       }
     } else {
-      customer.address = c.address;
-      await customer.save();
-      console.log(`Customer updated: ${c.email}`);
+      console.log(`Customer already exists: ${c.email}`);
     }
   }
 }
 
 async function seedCatalog() {
-  console.log('\n--- Seeding Catalog (Taxes, Products, Variants, Plans, Discounts) ---');
+  console.log('\n--- Seeding Taxes, Products, Plans, and Discounts ---');
 
-  // 1. Taxes
-  const taxesData = [
-    { name: 'GST 18%', percent: 18, description: 'Standard GST on Cloud & IT SaaS Services', active: true },
-    { name: 'GST 5%', percent: 5, description: 'Concessional essential digital services', active: true },
-    { name: 'Exempt 0%', percent: 0, description: 'Export of services / Special SEZ exemptions', active: true },
+  // Taxes
+  const taxRates = [
+    { name: 'GST 18%', percent: 18, description: 'Standard GST on IT & Cloud services' },
+    { name: 'GST 5%', percent: 5, description: 'Concessional GST rate' },
+    { name: 'Exempt 0%', percent: 0, description: 'Exempted or zero-rated services' },
   ];
 
-  const taxMap = {};
-  for (const t of taxesData) {
+  const taxesMap = {};
+  for (const t of taxRates) {
     let tax = await Tax.findOne({ name: t.name });
     if (!tax) {
       tax = await Tax.create(t);
-      console.log(`Created tax: ${t.name}`);
+      console.log(`Created tax: ${t.name} (${t.percent}%)`);
     } else {
       tax.percent = t.percent;
       tax.description = t.description;
       await tax.save();
       console.log(`Tax updated: ${t.name}`);
     }
-    taxMap[t.name] = tax;
+    taxesMap[t.name] = tax._id;
   }
 
-  // 2. Products & Variants (including Business Software with Odoo +560)
+  // Products and Variants
   const productsData = [
     {
       name: 'Business Software Suite',
       type: 'subscription',
       salesPrice: 1000,
       costPrice: 400,
-      notes: 'Integrated enterprise resource planning, invoicing and inventory suite.',
-      tax: taxMap['GST 18%']._id,
+      notes: 'Flagship enterprise ERP and CRM package',
+      taxName: 'GST 18%',
       variants: [
-        { attribute: 'Brand', value: 'Odoo Edition', extraPrice: 560 }, // 1000 + 560 = 1560
-        { attribute: 'Brand', value: 'Standard Open Source', extraPrice: 0 },
+        { attribute: 'Brand', value: 'Standard Edition', extraPrice: 0 },
+        { attribute: 'Brand', value: 'Odoo Edition', extraPrice: 560 }, // Test case: ₹1,000 + ₹560 = ₹1,560
+        { attribute: 'Tier', value: 'Multi-Company Add-on', extraPrice: 350 },
       ],
     },
     {
-      name: 'Cloud Compute Instance',
+      name: 'Cloud Dedicated Database',
       type: 'service',
-      salesPrice: 2500,
-      costPrice: 1200,
-      notes: 'High-availability compute nodes hosted in Mumbai & Hyderabad data centers.',
-      tax: taxMap['GST 18%']._id,
+      salesPrice: 3500,
+      costPrice: 1500,
+      notes: 'High-availability PostgreSQL/MongoDB replica set',
+      taxName: 'GST 18%',
       variants: [
-        { attribute: 'Config', value: '4 vCPU / 16GB RAM', extraPrice: 1500 },
-        { attribute: 'Config', value: '2 vCPU / 8GB RAM', extraPrice: 0 },
+        { attribute: 'Storage', value: '50GB NVMe', extraPrice: 0 },
+        { attribute: 'Storage', value: '250GB NVMe', extraPrice: 1200 },
+        { attribute: 'Storage', value: '1TB NVMe', extraPrice: 3800 },
       ],
     },
     {
-      name: 'Priority Support Desk',
+      name: 'User License Seat',
+      type: 'subscription',
+      salesPrice: 450,
+      costPrice: 100,
+      notes: 'Per-seat user license with role-based permissions',
+      taxName: 'GST 18%',
+      variants: [
+        { attribute: 'Role', value: 'Standard User', extraPrice: 0 },
+        { attribute: 'Role', value: 'Power Analyst', extraPrice: 200 },
+      ],
+    },
+    {
+      name: 'Premium 24x7 Support SLA',
       type: 'service',
-      salesPrice: 800,
-      costPrice: 300,
-      notes: 'Direct 15-minute SLA ticketing with dedicated technical account manager.',
-      tax: taxMap['GST 18%']._id,
-      variants: [
-        { attribute: 'Tier', value: '24x7 Dedicated TAM', extraPrice: 1200 },
-        { attribute: 'Tier', value: 'Business Hours', extraPrice: 0 },
-      ],
+      salesPrice: 2000,
+      costPrice: 600,
+      notes: 'Guaranteed 15-minute response time and dedicated TAM',
+      taxName: 'GST 18%',
+      variants: [],
     },
     {
-      name: 'Enterprise SSL & Security Shield',
-      type: 'digital',
-      salesPrice: 400,
-      costPrice: 150,
-      notes: 'Automated TLS wildcard certificate with DDoS mitigation layer.',
-      tax: taxMap['GST 18%']._id,
+      name: 'Hardware Security Key (FIDO2)',
+      type: 'physical',
+      salesPrice: 1200,
+      costPrice: 600,
+      notes: 'Dual USB-A/NFC hardware authenticator token',
+      taxName: 'GST 5%',
       variants: [
-        { attribute: 'Coverage', value: 'Multi-Domain Wildcard', extraPrice: 600 },
-        { attribute: 'Coverage', value: 'Single Domain', extraPrice: 0 },
-      ],
-    },
-    {
-      name: 'Automated Cloud Vault Backup',
-      type: 'digital',
-      salesPrice: 600,
-      costPrice: 200,
-      notes: 'Daily snapshot backups with geo-redundant storage in Bangalore.',
-      tax: taxMap['GST 5%']._id,
-      variants: [
-        { attribute: 'Storage', value: '1 TB Encrypted Storage', extraPrice: 400 },
-        { attribute: 'Storage', value: '500 GB Encrypted Storage', extraPrice: 0 },
+        { attribute: 'Connector', value: 'Type-C', extraPrice: 150 },
+        { attribute: 'Connector', value: 'Type-A', extraPrice: 0 },
       ],
     },
   ];
 
-  const productMap = {};
+  const productsMap = {};
   for (const p of productsData) {
     let product = await Product.findOne({ name: p.name });
     if (!product) {
@@ -256,20 +262,18 @@ async function seedCatalog() {
         salesPrice: p.salesPrice,
         costPrice: p.costPrice,
         notes: p.notes,
-        tax: p.tax,
-        archived: false,
+        tax: taxesMap[p.taxName],
       });
       console.log(`Created product: ${p.name}`);
     } else {
       product.salesPrice = p.salesPrice;
       product.costPrice = p.costPrice;
-      product.tax = p.tax;
+      product.tax = taxesMap[p.taxName];
       await product.save();
       console.log(`Product updated: ${p.name}`);
     }
-    productMap[p.name] = product;
+    productsMap[p.name] = product._id;
 
-    // Seed Variants
     for (const v of p.variants) {
       let variant = await ProductVariant.findOne({
         product: product._id,
@@ -283,100 +287,105 @@ async function seedCatalog() {
           value: v.value,
           extraPrice: v.extraPrice,
         });
-        console.log(`  Created variant: ${v.attribute} - ${v.value} (+₹${v.extraPrice})`);
-      } else {
-        variant.extraPrice = v.extraPrice;
-        await variant.save();
+        console.log(`  Added variant: ${v.attribute}=${v.value} (+₹${v.extraPrice})`);
       }
     }
   }
 
-  // 3. Subscription Plans (daily, weekly, monthly, yearly)
+  // Subscription Plans
   const plansData = [
     {
-      name: 'Startup Daily Plan',
-      product: productMap['Business Software Suite']._id,
-      price: 100,
+      name: 'Startup Daily Sandbox',
+      productName: 'Cloud Dedicated Database',
+      price: 250,
       billingPeriod: 'daily',
       minQty: 1,
-      autoClose: false,
-      allowEarlyClose: true,
       allowPause: true,
+      allowEarlyClose: true,
       allowRenew: true,
-      active: true,
+      autoClose: false,
     },
     {
-      name: 'Growth Weekly Plan',
-      product: productMap['Cloud Compute Instance']._id,
-      price: 600,
+      name: 'Growth Weekly Sprint',
+      productName: 'User License Seat',
+      price: 1500,
       billingPeriod: 'weekly',
       minQty: 2,
-      autoClose: true, // Auto-close without pause as required by spec
+      allowPause: false, // Disallowed pause
       allowEarlyClose: true,
-      allowPause: false,
       allowRenew: true,
-      active: true,
+      autoClose: true, // Auto close on expiry
     },
     {
-      name: 'Enterprise Monthly Plan',
-      product: productMap['Business Software Suite']._id,
-      price: 2500,
+      name: 'Enterprise Monthly Scale',
+      productName: 'Business Software Suite',
+      price: 5000,
       billingPeriod: 'monthly',
-      minQty: 5,
-      autoClose: false,
+      minQty: 1,
+      allowPause: true,
       allowEarlyClose: true,
-      allowPause: true, // All flags enabled
       allowRenew: true,
-      active: true,
+      autoClose: false,
     },
     {
-      name: 'Corporate Annual Plan',
-      product: productMap['Cloud Compute Instance']._id,
-      price: 25000,
+      name: 'Corporate Annual Suite',
+      productName: 'Business Software Suite',
+      price: 54000,
       billingPeriod: 'yearly',
-      minQty: 10,
-      autoClose: true,
-      allowEarlyClose: true,
+      minQty: 1,
       allowPause: true,
+      allowEarlyClose: false, // Locked annual contract
       allowRenew: true,
-      active: true,
+      autoClose: false,
     },
   ];
 
+  const plansMap = {};
   for (const pl of plansData) {
     let plan = await SubscriptionPlan.findOne({ name: pl.name });
+    const payload = {
+      name: pl.name,
+      product: productsMap[pl.productName],
+      price: pl.price,
+      billingPeriod: pl.billingPeriod,
+      minQty: pl.minQty,
+      allowPause: pl.allowPause,
+      allowEarlyClose: pl.allowEarlyClose,
+      allowRenew: pl.allowRenew,
+      autoClose: pl.autoClose,
+      active: true,
+    };
+
     if (!plan) {
-      await SubscriptionPlan.create(pl);
-      console.log(`Created plan: ${pl.name} (${pl.billingPeriod} - ₹${pl.price})`);
+      plan = await SubscriptionPlan.create(payload);
+      console.log(`Created plan: ${pl.name} (${pl.billingPeriod})`);
     } else {
-      Object.assign(plan, pl);
+      Object.assign(plan, payload);
       await plan.save();
       console.log(`Plan updated: ${pl.name}`);
     }
+    plansMap[pl.name] = plan._id;
   }
 
-  // 4. Discounts (10% at 10+ seats, fixed ₹500 above ₹5,000, one expired, one exhausted, one scheduled)
+  // Discounts
   const discountsData = [
     {
-      name: '10% at 10+ Seats',
+      name: '10% at 10+ seats',
       type: 'percent',
       value: 10,
       minQty: 10,
-      minPurchase: 0,
-      scope: 'subscription',
+      scope: 'product',
+      products: [productsMap['User License Seat']],
       active: true,
-      usageLimit: null,
       timesUsed: 0,
     },
     {
-      name: '₹500 Off Above ₹5,000',
+      name: '₹500 off orders above ₹5,000',
       type: 'fixed',
       value: 500,
       minPurchase: 5000,
-      minQty: 1,
       scope: 'subscription',
       active: true,
-      usageLimit: null,
       timesUsed: 0,
     },
     {
@@ -385,7 +394,7 @@ async function seedCatalog() {
       value: 15,
       minPurchase: 1000,
       startDate: new Date('2025-10-01'),
-      endDate: new Date('2025-12-31'), // In past -> expired
+      endDate: new Date('2025-12-31'),
       scope: 'subscription',
       active: true,
       timesUsed: 12,
@@ -395,7 +404,7 @@ async function seedCatalog() {
       type: 'fixed',
       value: 200,
       usageLimit: 5,
-      timesUsed: 5, // Exhausted
+      timesUsed: 5,
       scope: 'subscription',
       active: true,
     },
@@ -403,7 +412,7 @@ async function seedCatalog() {
       name: 'Scheduled New Year 2027',
       type: 'percent',
       value: 20,
-      startDate: new Date('2027-01-01'), // Future -> scheduled
+      startDate: new Date('2027-01-01'),
       endDate: new Date('2027-01-31'),
       scope: 'subscription',
       active: true,
@@ -422,6 +431,238 @@ async function seedCatalog() {
       console.log(`Discount updated: ${d.name}`);
     }
   }
+
+  return { taxesMap, productsMap, plansMap };
+}
+
+async function seedSales({ productsMap, plansMap }) {
+  console.log('\n--- Seeding Quotation Templates, Quotations, and Subscriptions ---');
+
+  const admin = await User.findOne({ email: DEMO_ADMIN.email });
+  const customers = await Customer.find().lean();
+  const allProducts = await Product.find().lean();
+  const allPlans = await SubscriptionPlan.find().lean();
+  const odooVariant = await ProductVariant.findOne({ value: 'Odoo Edition' });
+
+  // 1. Quotation Templates
+  const templatesData = [
+    {
+      name: 'Starter SaaS Package',
+      validityDays: 30,
+      planName: 'Enterprise Monthly Scale',
+      productName: 'Business Software Suite',
+      qty: 1,
+    },
+    {
+      name: 'Team High-Growth Suite (15 Seats)',
+      validityDays: 45,
+      planName: 'Growth Weekly Sprint',
+      productName: 'User License Seat',
+      qty: 15,
+    },
+    {
+      name: 'Corporate Annual Infrastructure',
+      validityDays: 60,
+      planName: 'Corporate Annual Suite',
+      productName: 'Business Software Suite',
+      qty: 1,
+      variantId: odooVariant?._id,
+    },
+  ];
+
+  const templateDocs = [];
+  for (const t of templatesData) {
+    let tmpl = await QuotationTemplate.findOne({ name: t.name });
+    const planId = plansMap[t.planName];
+    const prodId = productsMap[t.productName];
+
+    if (!tmpl) {
+      tmpl = await QuotationTemplate.create({
+        name: t.name,
+        validityDays: t.validityDays,
+        plan: planId,
+        lines: [
+          {
+            product: prodId,
+            variant: t.variantId || undefined,
+            quantity: t.qty,
+          },
+        ],
+      });
+      console.log(`Created template: ${t.name}`);
+    }
+    templateDocs.push(tmpl);
+  }
+
+  // 2. Quotations (Varied statuses: draft, quotation, confirmed, expired)
+  console.log('Seeding demo quotations...');
+  const existingQuotesCount = await Quotation.countDocuments();
+  if (existingQuotesCount < 10) {
+    const statuses = ['draft', 'quotation', 'confirmed'];
+    for (let i = 0; i < 12; i++) {
+      const cust = customers[i % customers.length];
+      const plan = allPlans[i % allPlans.length];
+      const prod = allProducts[i % allProducts.length];
+      const status = statuses[i % statuses.length];
+      const isExpired = i === 2; // Make one quotation explicitly expired for verification
+
+      const validUntil = isExpired
+        ? new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
+        : new Date(Date.now() + (15 + i * 5) * 24 * 60 * 60 * 1000);
+
+      const qty = Math.max(plan.minQty || 1, 1 + (i % 5));
+      const pricing = await quote({
+        lines: [{ product: prod._id.toString(), quantity: qty }],
+        planId: plan._id.toString(),
+        customerId: cust._id.toString(),
+      });
+
+      const number = await nextSequence('QUO');
+      const quo = await Quotation.create({
+        number,
+        customer: cust._id,
+        plan: plan._id,
+        template: templateDocs[i % templateDocs.length]._id,
+        lines: pricing.lines,
+        subtotal: pricing.subtotal,
+        discountTotal: pricing.discountTotal,
+        taxTotal: pricing.taxTotal,
+        total: pricing.total,
+        validUntil,
+        status,
+        createdBy: admin._id,
+      });
+
+      await StatusHistory.create({
+        entityType: 'quotation',
+        entityId: quo._id,
+        to: status,
+        changedBy: admin._id,
+        note: `Initial seed state: ${status}`,
+        at: new Date(Date.now() - (12 - i) * 3 * 24 * 60 * 60 * 1000),
+      });
+    }
+    console.log('Seeded 12 demo quotations');
+  }
+
+  // 3. Subscriptions (at least 25 subscriptions spread over 6 months)
+  console.log('Seeding demo subscriptions (at least 25 entries)...');
+  const existingSubsCount = await Subscription.countDocuments();
+  if (existingSubsCount < 25) {
+    const subStatuses = ['active', 'active', 'active', 'paused', 'closed'];
+
+    for (let i = 0; i < 28; i++) {
+      const cust = customers[i % customers.length];
+      const plan = allPlans[i % allPlans.length];
+      const prod = allProducts[i % allProducts.length];
+      const status = subStatuses[i % subStatuses.length];
+
+      // Spread start dates over the past 6 months (180 days)
+      const daysAgo = Math.floor((28 - i) * 6);
+      const startDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+      const expiryDate = new Date(startDate);
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+
+      // Some nextBillingDate in the past for Time Machine catch-up test
+      let nextBillingDate = new Date(startDate);
+      if (status === 'active') {
+        if (i % 3 === 0) {
+          // In past! Due for billing
+          nextBillingDate = new Date(Date.now() - (i + 1) * 2 * 24 * 60 * 60 * 1000);
+        } else {
+          nextBillingDate = new Date(Date.now() + (i + 5) * 24 * 60 * 60 * 1000);
+        }
+      }
+
+      const qty = Math.max(plan.minQty || 1, 1 + (i % 4));
+      const pricing = await quote({
+        lines: [{ product: prod._id.toString(), quantity: qty }],
+        planId: plan._id.toString(),
+        customerId: cust._id.toString(),
+      });
+
+      const number = await nextSequence('SUB');
+      const sub = await Subscription.create({
+        number,
+        customer: cust._id,
+        plan: plan._id,
+        startDate,
+        expiryDate,
+        paymentTerms: i % 2 === 0 ? 'immediate' : 'net30',
+        lines: pricing.lines,
+        subtotal: pricing.subtotal,
+        discountTotal: pricing.discountTotal,
+        taxTotal: pricing.taxTotal,
+        total: pricing.total,
+        status,
+        nextBillingDate: status === 'active' ? nextBillingDate : undefined,
+        pausedAt: status === 'paused' ? new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) : undefined,
+        closedAt: status === 'closed' ? new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) : undefined,
+      });
+
+      // Status history
+      await StatusHistory.create({
+        entityType: 'subscription',
+        entityId: sub._id,
+        from: 'confirmed',
+        to: status,
+        changedBy: admin._id,
+        at: startDate,
+        note: `Contract initial setup: ${status}`,
+      });
+
+      // MrrChange spread over 6 months
+      const mrr = calculateMrr(sub);
+      await MrrChange.create({
+        subscription: sub._id,
+        type: 'new',
+        amount: mrr,
+        at: startDate,
+      });
+
+      if (status === 'closed') {
+        await MrrChange.create({
+          subscription: sub._id,
+          type: 'churn',
+          amount: mrr,
+          at: sub.closedAt,
+        });
+      }
+    }
+    console.log('Seeded 28 demo subscriptions with historical MRR changes');
+  }
+
+  // 4. Sample Invoices and Payments for demo
+  const sampleCust = customers[0];
+  const sampleInv = await Invoice.findOne({ number: 'INV-DEMO-001' });
+  if (!sampleInv && sampleCust) {
+    const inv = await Invoice.create({
+      number: 'INV-DEMO-001',
+      customer: sampleCust._id,
+      issueDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+      subtotal: 5000,
+      discountTotal: 0,
+      taxTotal: 900,
+      total: 5900,
+      amountPaid: 2000,
+      balance: 3900,
+      status: 'confirmed',
+    });
+
+    const payNumber = await nextSequence('PAY');
+    await Payment.create({
+      number: payNumber,
+      customer: sampleCust._id,
+      invoice: inv._id,
+      method: 'bank_transfer',
+      amount: 2000,
+      paidOn: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+      note: 'Demo initial installment',
+      recordedBy: admin._id,
+    });
+    console.log('Seeded sample invoice INV-DEMO-001 with partial payment');
+  }
 }
 
 async function main() {
@@ -430,7 +671,8 @@ async function main() {
   console.log('Connected.');
 
   await seedUsers();
-  await seedCatalog();
+  const catalog = await seedCatalog();
+  await seedSales(catalog);
 
   console.log('\n========================================');
   console.log('DEMO CREDENTIALS');
