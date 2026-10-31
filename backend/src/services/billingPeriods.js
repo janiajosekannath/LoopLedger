@@ -1,9 +1,28 @@
 // services/billingPeriods.js
 // Utility to calculate billing periods for a subscription up to a given `asOf` date.
 // It respects the subscription plan's billingPeriod (daily, weekly, monthly, yearly)
-// and generates sequential periods when the system was offline (catch‑up).
+// and generates sequential periods when the system was offline (catch-up).
 
-const moment = require('moment'); // moment is already a dependency of the project (used elsewhere)
+function addPeriod(date, billingPeriod) {
+  const d = new Date(date);
+  switch (billingPeriod) {
+    case 'daily':
+      d.setUTCDate(d.getUTCDate() + 1);
+      break;
+    case 'weekly':
+      d.setUTCDate(d.getUTCDate() + 7);
+      break;
+    case 'monthly':
+      d.setUTCMonth(d.getUTCMonth() + 1);
+      break;
+    case 'yearly':
+      d.setUTCFullYear(d.getUTCFullYear() + 1);
+      break;
+    default:
+      d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return d;
+}
 
 /**
  * Returns an array of period objects for the given subscription.
@@ -15,43 +34,29 @@ const moment = require('moment'); // moment is already a dependency of the proje
  */
 function getDuePeriods(subscription, asOf) {
   if (!subscription || !subscription.plan) return [];
-  const { billingPeriod, availableFrom, availableTo, autoClose, allowPause, allowRenew, active } = subscription.plan;
-  if (!active) return [];
+  const plan = subscription.plan;
+  if (plan.active === false) return [];
 
+  const billingPeriod = plan.billingPeriod || 'monthly';
   const periods = [];
-  let next = subscription.nextBillingDate ? moment(subscription.nextBillingDate) : null;
-  // If nextBillingDate is missing, start from subscription startDate
-  if (!next) next = moment(subscription.startDate);
 
-  const limit = moment(asOf);
-  // Guard: do not go beyond subscription.expiryDate
-  const expiry = subscription.expiryDate ? moment(subscription.expiryDate) : null;
+  let next = subscription.nextBillingDate
+    ? new Date(subscription.nextBillingDate)
+    : new Date(subscription.startDate || Date.now());
 
-  while (next.isSameOrBefore(limit)) {
-    if (expiry && next.isAfter(expiry)) break;
-    const start = next.clone();
-    // Compute end based on billingPeriod
-    let end;
-    switch (billingPeriod) {
-      case 'daily':
-        end = start.clone().add(1, 'day');
-        break;
-      case 'weekly':
-        end = start.clone().add(1, 'week');
-        break;
-      case 'monthly':
-        end = start.clone().add(1, 'month');
-        break;
-      case 'yearly':
-        end = start.clone().add(1, 'year');
-        break;
-      default:
-        end = start.clone().add(1, 'month');
-    }
-    periods.push({ periodStart: start.toDate(), periodEnd: end.toDate() });
-    // Advance to next period start
-    next = end.clone();
+  const limit = new Date(asOf || Date.now());
+  const expiry = subscription.expiryDate ? new Date(subscription.expiryDate) : null;
+
+  while (next <= limit) {
+    if (expiry && next > expiry) break;
+
+    const start = new Date(next);
+    const end = addPeriod(start, billingPeriod);
+
+    periods.push({ periodStart: start, periodEnd: end });
+    next = new Date(end);
   }
+
   return periods;
 }
 

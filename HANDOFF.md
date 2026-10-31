@@ -265,10 +265,14 @@ npm run dev
    - `POST /api/billing/run` (dryRun, asOf).
    - Invoice PDF generation (`PDFKit`) via `GET /api/invoices/:id/pdf`.
    - Time Machine page (`TimeMachinePage.jsx`) and Invoice management UI (`InvoicesPage.jsx`, `InvoiceDetailPage.jsx`).
-2. **Phase 6: Payments, Reminders, Collections, Customer Portal**:
-   - Payment webhooks/mock gateway, refund handling.
-   - Dunning & reminder jobs (`jobs/paymentReminders.js`) with `ReminderLog`.
-   - Customer Portal invoice download and payment flows.
+2. **Phase 6: Payments, Reminders, Collections, Customer Portal u{2013} COMPLETED**:
+   - Payment processing service (`paymentProcessor.js`) with settlement, discount counters, refunds, mock webhook.
+   - Invoice controller (CRUD, PDF, send, confirm, cancel, status transitions).
+   - Reminder and dunning cron job (`jobs/paymentReminders.js`) with Ethereal mock emails and `ReminderLog`.
+   - Customer Portal invoice listing and payment flow (`PortalInvoices.jsx`, `PortalInvoiceDetail.jsx`).
+   - `PaymentMethodSelect` component, `CollectionsPage.jsx` admin view, `utils/mailer.js`.
+   - 3 new test suites: `payments.test.js`, `reminders.test.js`, `portalPayments.test.js`.
+   - **All 65 tests pass across 11 suites.** Frontend build verified with 0 errors.
 3. **Phase 7: Reports, MRR Waterfall, Dashboard, Advanced UI**:
    - MRR Waterfall analytics (`GET /api/reports/mrr-waterfall`).
    - Revenue, Churn, ARPU, LTV reports with Recharts.

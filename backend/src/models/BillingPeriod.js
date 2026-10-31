@@ -13,4 +13,4 @@ const billingPeriodSchema = new mongoose.Schema({
 // Unique claim per subscription + periodStart ensures idempotency
 billingPeriodSchema.index({ subscription: 1, periodStart: 1 }, { unique: true });
 
-module.exports = mongoose.model('BillingPeriod', billingPeriodSchema);
+module.exports = mongoose.models.BillingPeriod || mongoose.model('BillingPeriod', billingPeriodSchema);

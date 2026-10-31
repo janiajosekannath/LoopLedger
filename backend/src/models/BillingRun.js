@@ -19,4 +19,4 @@ const billingRunSchema = new mongoose.Schema({
   details: [billingRunDetailSchema],
 }, { timestamps: true });
 
-module.exports = mongoose.model('BillingRun', billingRunSchema);
+module.exports = mongoose.models.BillingRun || mongoose.model('BillingRun', billingRunSchema);

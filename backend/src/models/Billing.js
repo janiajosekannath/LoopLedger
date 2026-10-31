@@ -38,7 +38,7 @@ const billingRunSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const BillingPeriod = mongoose.model('BillingPeriod', billingPeriodSchema);
-const BillingRun = mongoose.model('BillingRun', billingRunSchema);
+const BillingPeriod = mongoose.models.BillingPeriod || mongoose.model('BillingPeriod', billingPeriodSchema);
+const BillingRun = mongoose.models.BillingRun || mongoose.model('BillingRun', billingRunSchema);
 
 module.exports = { BillingPeriod, BillingRun };

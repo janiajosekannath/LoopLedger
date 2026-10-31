@@ -3,15 +3,15 @@
 // Creates BillingPeriod claims, computes invoice lines via pricingEngine,
 // creates draft Invoices, updates Subscription.nextBillingDate, and records a BillingRun.
 
-const moment = require('moment');
 const mongoose = require('mongoose');
 const BillingPeriod = require('../models/BillingPeriod');
 const BillingRun = require('../models/BillingRun');
 const Subscription = require('../models/Subscription');
 const Invoice = require('../models/Invoice');
 const pricingEngine = require('./pricingEngine');
-const audit = require('./audit');
+const { recordStatusChange } = require('./audit');
 const { getDuePeriods } = require('./billingPeriods');
+const { nextSequence } = require('../utils/sequence');
 
 /**
  * Run billing for all due subscription periods up to `asOf`.
@@ -23,9 +23,11 @@ const { getDuePeriods } = require('./billingPeriods');
  */
 async function runBilling({ asOf = new Date(), dryRun = false, triggeredBy = 'system' } = {}) {
   const mode = dryRun ? 'dry' : 'live';
+  const evaluationDate = asOf ? new Date(asOf) : new Date();
+
   const run = new BillingRun({
     mode,
-    asOf,
+    asOf: evaluationDate,
     triggeredBy,
     createdCount: 0,
     skippedCount: 0,
@@ -39,21 +41,33 @@ async function runBilling({ asOf = new Date(), dryRun = false, triggeredBy = 'sy
   if (dryRun) {
     const subs = await Subscription.find({ status: { $in: ['active', 'confirmed'] } }).populate('plan');
     for (const sub of subs) {
-      const periods = getDuePeriods(sub, asOf);
+      const periods = getDuePeriods(sub, evaluationDate);
       for (const p of periods) {
         try {
-          // pricingEngine expects lines, planId, customerId, asOf
           const quote = await pricingEngine.quote({
-            lines: [],
-            planId: sub.plan._id,
+            lines: sub.lines || [],
+            planId: sub.plan?._id || sub.plan,
             customerId: sub.customer,
+            subscriptionId: sub._id,
             asOf: p.periodStart,
           });
           run.createdCount += 1;
-          run.details.push({ subscription: sub._id, periodStart: p.periodStart, outcome: 'created', reason: 'dry‑run preview', invoice: null });
+          run.details.push({
+            subscription: sub._id,
+            periodStart: p.periodStart,
+            outcome: 'created',
+            reason: 'dry-run preview',
+            invoice: null,
+          });
         } catch (e) {
           run.failedCount += 1;
-          run.details.push({ subscription: sub._id, periodStart: p.periodStart, outcome: 'failed', reason: e.message, invoice: null });
+          run.details.push({
+            subscription: sub._id,
+            periodStart: p.periodStart,
+            outcome: 'failed',
+            reason: e.message,
+            invoice: null,
+          });
         }
       }
     }
@@ -67,7 +81,7 @@ async function runBilling({ asOf = new Date(), dryRun = false, triggeredBy = 'sy
   const liveSubs = await Subscription.find({ status: { $in: ['active', 'confirmed'] } }).populate('plan');
 
   for (const sub of liveSubs) {
-    const periods = getDuePeriods(sub, asOf);
+    const periods = getDuePeriods(sub, evaluationDate);
     for (const p of periods) {
       try {
         // 1️⃣ Insert claim – unique index guarantees single billing per period.
@@ -80,25 +94,30 @@ async function runBilling({ asOf = new Date(), dryRun = false, triggeredBy = 'sy
 
         // 2️⃣ Compute pricing via existing engine.
         const quote = await pricingEngine.quote({
-          lines: [],
-          planId: sub.plan._id,
+          lines: sub.lines || [],
+          planId: sub.plan?._id || sub.plan,
           customerId: sub.customer,
+          subscriptionId: sub._id,
           asOf: p.periodStart,
         });
 
+        const invoiceNumber = await nextSequence('INV');
+
         // 3️⃣ Persist draft invoice.
         const invoice = await Invoice.create({
+          number: invoiceNumber,
           customer: sub.customer,
           subscription: sub._id,
           billingPeriodStart: p.periodStart,
           billingPeriodEnd: p.periodEnd,
           issueDate: new Date(),
-          dueDate: moment(p.periodStart).add(15, 'days').toDate(),
+          dueDate: new Date(new Date(p.periodStart).getTime() + 15 * 86400000),
           lines: quote.lines,
           subtotal: quote.subtotal,
           discountTotal: quote.discountTotal,
           taxTotal: quote.taxTotal,
           total: quote.total,
+          amountPaid: 0,
           balance: quote.total,
           status: 'draft',
           appliedDiscounts: quote.appliedDiscounts,
@@ -112,29 +131,47 @@ async function runBilling({ asOf = new Date(), dryRun = false, triggeredBy = 'sy
         sub.nextBillingDate = p.periodEnd;
         await sub.save();
 
-        // 6️⃣ Record audit entry (optional – keeps history consistent).
-        await audit.record('subscription', sub._id, 'active', 'active', triggeredBy);
+        // 6️⃣ Record audit entry
+        await recordStatusChange({
+          entityType: 'invoice',
+          entityId: invoice._id,
+          from: null,
+          to: 'draft',
+          changedBy: null,
+          note: `Generated by automated billing run for period starting ${new Date(p.periodStart).toISOString().slice(0, 10)}`,
+        });
 
-        // 7️⃣ Increment discount usage counters (live only).
-        if (quote.appliedDiscounts && quote.appliedDiscounts.length) {
-          for (const d of quote.appliedDiscounts) {
-            await mongoose.model('Discount').findByIdAndUpdate(d.discount, { $inc: { timesUsed: 1 } });
-          }
-        }
-
-        // 8️⃣ Update run summary.
+        // 7️⃣ Update run summary.
         run.createdCount += 1;
-        run.details.push({ subscription: sub._id, periodStart: p.periodStart, outcome: 'created', reason: null, invoice: invoice._id });
+        run.details.push({
+          subscription: sub._id,
+          periodStart: p.periodStart,
+          outcome: 'created',
+          reason: null,
+          invoice: invoice._id,
+        });
       } catch (err) {
         // Duplicate key => already billed, just skip.
         if (err.code === 11000) {
           run.skippedCount += 1;
-          run.details.push({ subscription: sub._id, periodStart: p.periodStart, outcome: 'skipped', reason: 'already billed', invoice: null });
+          run.details.push({
+            subscription: sub._id,
+            periodStart: p.periodStart,
+            outcome: 'skipped',
+            reason: 'already billed',
+            invoice: null,
+          });
         } else {
           // Any other error – rollback claim if it exists.
           await BillingPeriod.deleteOne({ subscription: sub._id, periodStart: p.periodStart });
           run.failedCount += 1;
-          run.details.push({ subscription: sub._id, periodStart: p.periodStart, outcome: 'failed', reason: err.message, invoice: null });
+          run.details.push({
+            subscription: sub._id,
+            periodStart: p.periodStart,
+            outcome: 'failed',
+            reason: err.message,
+            invoice: null,
+          });
         }
       }
     }

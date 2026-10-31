@@ -1,13 +1,16 @@
+/**
+ * routes/billingRuns.js
+ */
+
 const express = require('express');
-const { protect, authorize } = require('../middleware/auth');
-const { listRuns, getRun } = require('../controllers/billingRunController');
-
 const router = express.Router();
+const billingController = require('../controllers/billingController');
+const { authenticate, authorize } = require('../middleware/auth');
 
-// List all billing runs (admin / staff only)
-router.get('/', protect, authorize('admin','staff'), listRuns);
+router.use(authenticate);
+router.use(authorize('admin', 'staff'));
 
-// Get details of a specific run
-router.get('/:id', protect, authorize('admin','staff'), getRun);
+router.get('/', billingController.listRuns);
+router.get('/:id', billingController.getRun);
 
 module.exports = router;

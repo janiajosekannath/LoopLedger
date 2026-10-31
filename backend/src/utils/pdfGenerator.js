@@ -1,5 +1,14 @@
 const PDFDocument = require('pdfkit');
-const moment = require('moment');
+
+function formatDate(date) {
+  if (!date) return 'N/A';
+  try {
+    const d = new Date(date);
+    return d.toISOString().slice(0, 10);
+  } catch (e) {
+    return 'N/A';
+  }
+}
 
 /**
  * Generate a PDF buffer for an invoice document.
@@ -15,18 +24,20 @@ function generateInvoicePDF(invoice) {
     doc.on('error', reject);
 
     // Header
-    doc.fontSize(20).text('LoopLedger Invoice', { align: 'center' });
+    doc.fontSize(22).font('Helvetica-Bold').text('LoopLedger Invoice', { align: 'center' });
     doc.moveDown();
-    doc.fontSize(12).text(`Invoice #: ${invoice.number || 'N/A'}`);
-    doc.text(`Issue Date: ${moment(invoice.issueDate).format('YYYY-MM-DD')}`);
-    doc.text(`Due Date: ${moment(invoice.dueDate).format('YYYY-MM-DD')}`);
-    doc.text(`Status: ${invoice.status}`);
+    doc.fontSize(11).font('Helvetica');
+    doc.text(`Invoice #: ${invoice.number || 'N/A'}`);
+    doc.text(`Issue Date: ${formatDate(invoice.issueDate)}`);
+    doc.text(`Due Date: ${formatDate(invoice.dueDate)}`);
+    doc.text(`Status: ${(invoice.status || 'draft').toUpperCase()}`);
     doc.moveDown();
 
     // Customer details
     const cust = invoice.customer || {};
-    doc.text('Bill To:', { underline: true });
-    doc.text(cust.name || cust.company || '');
+    doc.font('Helvetica-Bold').text('Bill To:');
+    doc.font('Helvetica').text(cust.name || cust.company || 'Customer');
+    if (cust.company && cust.name && cust.company !== cust.name) doc.text(cust.company);
     if (cust.address) doc.text(cust.address);
     if (cust.email) doc.text(`Email: ${cust.email}`);
     if (cust.phone) doc.text(`Phone: ${cust.phone}`);
@@ -45,27 +56,34 @@ function generateInvoicePDF(invoice) {
     doc.font('Helvetica');
 
     let y = tableTop + 20;
-    invoice.lines.forEach((line) => {
-      doc.text(line.description || `${line.product?.name || ''} ${line.variant?.value || ''}`, 50, y, { width: colWidths.desc });
-      doc.text(line.quantity, 300, y, { width: colWidths.qty, align: 'right' });
-      doc.text(`₹${line.unitPrice.toFixed(2)}`, 350, y, { width: colWidths.unit, align: 'right' });
-      doc.text(`${line.taxAmount ? line.taxAmount.toFixed(2) : 0}`, 430, y, { width: colWidths.tax, align: 'right' });
-      doc.text(`₹${line.amount.toFixed(2)}`, 490, y, { width: colWidths.total, align: 'right' });
+    const lines = invoice.lines || [];
+    lines.forEach((line) => {
+      const desc =
+        line.description ||
+        `${line.product?.name || 'Item'}${line.variant?.value ? ' - ' + line.variant.value : ''}`;
+      doc.text(desc, 50, y, { width: colWidths.desc });
+      doc.text(String(line.quantity || 1), 300, y, { width: colWidths.qty, align: 'right' });
+      doc.text(`INR ${(line.unitPrice || 0).toFixed(2)}`, 350, y, { width: colWidths.unit, align: 'right' });
+      doc.text(`${(line.taxAmount || 0).toFixed(2)}`, 430, y, { width: colWidths.tax, align: 'right' });
+      doc.text(`INR ${(line.amount || 0).toFixed(2)}`, 490, y, { width: colWidths.total, align: 'right' });
       y += 20;
     });
     doc.moveDown();
 
     // Summary
-    const sumY = y + 10;
-    doc.text(`Subtotal: ₹${invoice.subtotal.toFixed(2)}`, { align: 'right' });
-    doc.text(`Discounts: -₹${invoice.discountTotal.toFixed(2)}`, { align: 'right' });
-    doc.text(`Tax: ₹${invoice.taxTotal.toFixed(2)}`, { align: 'right' });
+    doc.y = y + 15;
+    doc.text(`Subtotal: INR ${(invoice.subtotal || 0).toFixed(2)}`, { align: 'right' });
+    if (invoice.discountTotal) {
+      doc.text(`Discounts: -INR ${(invoice.discountTotal || 0).toFixed(2)}`, { align: 'right' });
+    }
+    doc.text(`Tax: INR ${(invoice.taxTotal || 0).toFixed(2)}`, { align: 'right' });
     doc.font('Helvetica-Bold');
-    doc.text(`Total: ₹${invoice.total.toFixed(2)}`, { align: 'right' });
+    doc.text(`Total: INR ${(invoice.total || 0).toFixed(2)}`, { align: 'right' });
     doc.font('Helvetica');
     doc.moveDown();
-    doc.text(`Amount Paid: ₹${invoice.amountPaid.toFixed(2)}`);
-    doc.text(`Balance Due: ₹${invoice.balance.toFixed(2)}`);
+    doc.text(`Amount Paid: INR ${(invoice.amountPaid || 0).toFixed(2)}`, { align: 'right' });
+    doc.font('Helvetica-Bold');
+    doc.text(`Balance Due: INR ${(invoice.balance || 0).toFixed(2)}`, { align: 'right' });
 
     doc.end();
   });

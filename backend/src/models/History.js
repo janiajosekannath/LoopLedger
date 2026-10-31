@@ -18,11 +18,16 @@ statusHistorySchema.index({ entityType: 1, entityId: 1, at: -1 });
 const reminderLogSchema = new mongoose.Schema(
   {
     invoice: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice', required: true, index: true },
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', index: true },
     sentAt: { type: Date, default: Date.now },
     channel: { type: String, default: 'email' },
     sentBy: { type: String, default: 'system' },
+    recipient: { type: String },
+    messageId: { type: String },
+    previewUrl: { type: String },
+    status: { type: String, default: 'sent' },
   },
-  { timestamps: false }
+  { timestamps: true }
 );
 
 const mrrChangeSchema = new mongoose.Schema(
@@ -37,8 +42,8 @@ const mrrChangeSchema = new mongoose.Schema(
 
 mrrChangeSchema.index({ at: -1 });
 
-const StatusHistory = mongoose.model('StatusHistory', statusHistorySchema);
-const ReminderLog = mongoose.model('ReminderLog', reminderLogSchema);
-const MrrChange = mongoose.model('MrrChange', mrrChangeSchema);
+const StatusHistory = mongoose.models.StatusHistory || mongoose.model('StatusHistory', statusHistorySchema);
+const ReminderLog = mongoose.models.ReminderLog || mongoose.model('ReminderLog', reminderLogSchema);
+const MrrChange = mongoose.models.MrrChange || mongoose.model('MrrChange', mrrChangeSchema);
 
 module.exports = { StatusHistory, ReminderLog, MrrChange };
