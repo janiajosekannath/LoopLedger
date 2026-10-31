@@ -273,10 +273,16 @@ npm run dev
    - `PaymentMethodSelect` component, `CollectionsPage.jsx` admin view, `utils/mailer.js`.
    - 3 new test suites: `payments.test.js`, `reminders.test.js`, `portalPayments.test.js`.
    - **All 65 tests pass across 11 suites.** Frontend build verified with 0 errors.
-3. **Phase 7: Reports, MRR Waterfall, Dashboard, Advanced UI**:
-   - MRR Waterfall analytics (`GET /api/reports/mrr-waterfall`).
-   - Revenue, Churn, ARPU, LTV reports with Recharts.
-   - Interactive Dashboard charts.
+3. **Phase 7: Reports, MRR Waterfall, Dashboard, Advanced UI — COMPLETED**:
+   - Reports analytics service with MRR waterfall, revenue breakdown, churn analysis, dashboard KPIs.
+   - `GET /api/reports/summary` — live MRR, ARR, ARPU, LTV, churn rate, overdue, outstanding.
+   - `GET /api/reports/mrr-waterfall?months=N` — UTC-consistent monthly MRR trend.
+   - `GET /api/reports/revenue?months=N` — monthly collected revenue.
+   - `GET /api/reports/churn?months=N` — monthly new vs churned subscriptions.
+   - **ReportsPage.jsx**: 3-tab analytics (Waterfall, Revenue, Churn) with Recharts.
+   - **DashboardPage.jsx**: Live KPI cards (MRR, ARR, ARPU, LTV, Churn Rate).
+   - `tests/mrr.test.js`: **18 passing tests**.
+   - **All 83 tests pass across 12 suites.**
 4. **Phase 8: Scale & Seed (10k subscriptions benchmark), Stress Testing**:
    - High-volume seed script (`npm run seed:bulk`) generating 10,000 subscriptions.
    - Index verification and query performance profiling (< 200ms target).

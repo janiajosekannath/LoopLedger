@@ -3,11 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Users, TrendingUp, DollarSign, AlertTriangle, BarChart3,
-  ReceiptText, Plus, UserPlus, ArrowRight, Building, Mail
+  ReceiptText, Plus, UserPlus, ArrowRight, Building, Mail,
+  RefreshCw,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import { customersApi } from '../api/customers';
+import { reportsApi } from '../api/reports';
+
+const fmt = (n) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -18,8 +23,16 @@ const DashboardPage = () => {
     queryFn: () => customersApi.list({ page: 1, limit: 5 }).then((res) => res.data),
   });
 
+  // Fetch live KPI summary (Phase 7)
+  const { data: summaryData, isLoading: summaryLoading } = useQuery({
+    queryKey: ['reports-summary'],
+    queryFn: reportsApi.summary,
+    staleTime: 60_000,
+  });
+
   const recentCustomers = customersData?.data || [];
   const totalCustomers = customersData?.meta?.total || 0;
+  const s = summaryData?.data || {};
 
   return (
     <div className="space-y-6">
@@ -39,50 +52,70 @@ const DashboardPage = () => {
         }
       />
 
-      {/* Six Metric Cards */}
+      {/* Six Metric Cards – live data from /api/reports/summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           title="Active Subscriptions"
-          value="0"
+          value={summaryLoading ? '…' : String(s.activeSubscriptions ?? 0)}
           icon={ReceiptText}
           color="indigo"
           hint="Recurring customer active contracts"
         />
         <StatCard
           title="MRR (Monthly Recurring Revenue)"
-          value="₹0.00"
+          value={summaryLoading ? '…' : fmt(s.mrr)}
           icon={TrendingUp}
           color="green"
           hint="Normalized monthly run-rate"
         />
         <StatCard
           title="ARR (Annual Run Rate)"
-          value="₹0.00"
+          value={summaryLoading ? '…' : fmt(s.arr)}
           icon={BarChart3}
           color="blue"
-          hint="MRR normalized × 12"
+          hint="MRR × 12"
         />
         <StatCard
-          title="Total Revenue Collected"
-          value="₹0.00"
+          title="Revenue Collected This Month"
+          value={summaryLoading ? '…' : fmt(s.revenueThisMonth)}
           icon={DollarSign}
           color="green"
-          hint="Sum of actual payments received"
+          hint="Sum of actual payments received this month"
         />
         <StatCard
           title="Outstanding Payments"
-          value="₹0.00"
+          value={summaryLoading ? '…' : fmt(s.outstanding)}
           icon={Users}
           color="yellow"
           hint="Unpaid confirmed invoice balances"
         />
         <StatCard
           title="Overdue Invoices"
-          value="0"
+          value={summaryLoading ? '…' : String(s.overdueCount ?? 0)}
           icon={AlertTriangle}
           color="red"
           hint="Past due balance > 0"
         />
+      </div>
+
+      {/* Secondary KPIs: ARPU, LTV, Churn Rate */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: 'ARPU', value: summaryLoading ? '…' : fmt(s.arpu), hint: 'Avg revenue per active user', icon: DollarSign },
+          { label: 'LTV Estimate', value: summaryLoading ? '…' : fmt(s.ltv), hint: 'ARPU / historical churn rate', icon: TrendingUp },
+          { label: 'Churn Rate', value: summaryLoading ? '…' : `${s.churnRate ?? 0}%`, hint: 'Closed / total subscriptions', icon: RefreshCw },
+        ].map((k) => (
+          <div key={k.label} className="card flex items-center gap-3 py-3">
+            <div className="p-2 bg-gray-100 text-gray-600 rounded-lg">
+              <k.icon className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{k.label}</p>
+              <p className="text-base font-bold text-gray-900">{k.value}</p>
+              <p className="text-xs text-gray-400">{k.hint}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Main Grid: Quick Actions & Recent Customers */}
@@ -151,7 +184,7 @@ const DashboardPage = () => {
           </div>
         </div>
 
-        {/* Right 1 Col: Quick Actions & Stage Progress */}
+        {/* Right 1 Col: Quick Actions & Promo */}
         <div className="space-y-6">
           <div className="card">
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h2>
@@ -203,16 +236,33 @@ const DashboardPage = () => {
                 </div>
                 <ArrowRight className="w-4 h-4 text-gray-400" />
               </button>
+
+              <button
+                onClick={() => navigate('/reports')}
+                className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-purple-100 text-purple-700 rounded-lg">
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">View Reports</p>
+                    <p className="text-xs text-gray-500">MRR waterfall & analytics</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-gray-400" />
+              </button>
             </div>
           </div>
 
           <div className="card bg-slate-900 text-white">
-            <h2 className="text-sm font-semibold mb-1">Billing Time Machine Ready</h2>
+            <h2 className="text-sm font-semibold mb-1">Phase 7 Analytics Live</h2>
             <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-              Phase 5 billing engine delivers idempotent, double-billing-proof recurring invoice generation.
+              Real-time MRR / ARR / ARPU / LTV metrics powered by the billing engine.
+              Visit <span className="text-indigo-300 font-medium">Reports</span> for waterfall charts.
             </p>
             <div className="text-xs text-indigo-400 font-medium">
-              Currency: INR (₹) • UTC Billing Ledger
+              Currency: INR (₹) · UTC Billing Ledger
             </div>
           </div>
         </div>

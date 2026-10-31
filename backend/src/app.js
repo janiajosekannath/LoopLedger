@@ -22,6 +22,7 @@ const paymentRoutes = require('./routes/payments');
 const billingRoutes = require('./routes/billing');
 const billingRunsRoutes = require('./routes/billingRuns');
 const reminderRoutes = require('./routes/reminders');
+const reportRoutes = require('./routes/reports');
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/billing-runs', billingRunsRoutes);
 app.use('/api/reminders', reminderRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
