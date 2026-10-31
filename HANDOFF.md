@@ -21,35 +21,14 @@ Currency: INR (₹)
   - Currency rounding utility `utils/money.js` with `round2`.
   - Email notification system in `config/mailer.js` supporting SMTP with automatic Ethereal test account fallback for local dev.
 - **Data Models (all 14 models defined with schemas, indexes, and validations)**:
-  - `User`: email (lowercase, unique), passwordHash (hidden), role (`admin`, `staff`, `customer`), customer ref, isActive, resetTokenHash, resetExpires.
-  - `Customer`: name, email, phone, company, address, registeredAt, user ref. Text indexed.
-  - `Product` & `ProductVariant`: product types, salesPrice, costPrice, notes, tax ref, variant compound unique index.
-  - `SubscriptionPlan`: billingPeriod (`daily`, `weekly`, `monthly`, `yearly`), minQty, availableFrom/To, flags (`autoClose`, `allowEarlyClose`, `allowPause`, `allowRenew`, `active`).
-  - `Tax`: name, percent (0-100), description, active.
-  - `Discount`: fixed/percent, minPurchase, minQty, dates, usageLimit, timesUsed, scope (`product`, `subscription`).
-  - `QuotationTemplate` & `Quotation`: draft -> quotation -> confirmed lifecycle, quote lines, pricing breakdown.
-  - `Subscription`: statuses, lifecycle fields, nextBillingDate, compound indexes.
-  - `Invoice`: line items, status (`draft`, `confirmed`, `paid`, `cancelled`), balance, applied discounts, issue/due dates.
-  - `Payment`: methods, amount, paidOn, recordedBy.
-  - `BillingPeriod` & `BillingRun`: unique compound index `(subscription, periodStart)` preventing double-billing.
-  - `StatusHistory`, `ReminderLog`, `MrrChange`, `Counter`.
+  - `User`, `Customer`, `Product`, `ProductVariant`, `SubscriptionPlan`, `Tax`, `Discount`, `QuotationTemplate`, `Quotation`, `Subscription`, `Invoice`, `Payment`, `BillingPeriod`, `BillingRun`, `StatusHistory`, `ReminderLog`, `MrrChange`, `Counter`.
 - **Authentication & Admin API**:
   - Strict password validation: >= 9 characters, >= 1 uppercase, >= 1 lowercase, >= 1 special character.
-  - `POST /api/auth/signup`: creates customer-role User and automatically links Customer record.
-  - `POST /api/auth/login`: validates credentials, issues JWT containing `{ userId, role, customerId }`.
-  - `POST /api/auth/forgot-password`: single-use token, 30-min expiry, sends email or logs Ethereal link, never leaks email existence.
-  - `POST /api/auth/reset-password`: single-use consumption of token, password update.
-  - `GET /api/auth/me`: retrieves authenticated user profile and linked customer data.
-  - `POST /api/admin/staff`: admin-only endpoint to create staff members.
-  - `GET /api/admin/staff`: admin-only paginated staff list with search.
-  - `PATCH /api/admin/staff/:id/toggle`: admin-only staff activation toggle.
-  - `GET /api/health`: healthcheck endpoint.
+  - Public signup, login, password reset with single-use tokens.
+  - Staff management endpoints for admin.
 - **Frontend Core**:
   - Vite + React 18 + Tailwind CSS + React Router v6 + TanStack Query + Axios.
-  - Design tokens: Indigo accent, slate sidebar, clean white/gray cards.
-  - Core components: `DataTable`, `Pagination`, `Modal`, `ConfirmDialog`, `StatusBadge`, `StatCard`, `PageHeader`, `EmptyState`, `Spinner`, `FormField`, `SearchInput`, `Toast`, `Timeline`.
-  - Layouts: `AdminLayout` (responsive with collapsible dark sidebar) and `PortalLayout` (customer scoped).
-  - Auth Pages: `LoginPage`, `SignupPage` (live password criteria checklist), `ForgotPasswordPage`, `ResetPasswordPage`, `NotFoundPage`.
+  - Shared UI components: `DataTable`, `Pagination`, `Modal`, `ConfirmDialog`, `StatusBadge`, `StatCard`, `PageHeader`, `EmptyState`, `Spinner`, `FormField`, `SearchInput`, `Toast`, `Timeline`.
 
 ---
 
@@ -57,73 +36,92 @@ Currency: INR (₹)
 
 ### 1. Done in Phase 2
 - **Backend Customers Module**:
-  - Full CRUD API at `/api/customers` with Zod validation and central error handling.
-  - Search across name, email, company, and phone with regex case-insensitive matching.
-  - Pagination with configurable `limit` (capped at 100) and `page`, returning standard `{ success, data, meta: { page, limit, total, totalPages } }`.
-  - Deletion business protection: deletes are strictly blocked (400 Bad Request) if linked subscriptions or invoices exist.
-  - Sub-resource endpoints:
-    - `GET /api/customers/:id/subscriptions` (with populated plans)
-    - `GET /api/customers/:id/invoices` (with populated subscription number)
-    - `GET /api/customers/:id/payments` (with populated invoice number and balance)
-  - Customer security isolation: customers can only view their own profile and sub-resources via their JWT `customerId`; accessing other customer IDs returns 403 Forbidden.
-- **Frontend Customers Module (`CustomersPage.jsx` & `CustomerDetailPage.jsx`)**:
-  - `CustomersPage`:
-    - Responsive DataTable with name initial avatars, email, company, phone, location (City, State), and registration dates.
-    - Live SearchInput and Pagination controls.
-    - Add and Edit Customer modal with full billing address fields and validation.
-    - Delete customer flow with `ConfirmDialog` and error toasts if customer has active records.
-    - Row-click navigation directly to detail view.
-  - `CustomerDetailPage`:
-    - Complete customer profile header with portal account status badge and full address display.
-    - Real-time stat summary cards: Total Subscriptions, Total Invoiced count, and Total Revenue Collected (₹).
-    - Three interactive tabs:
-      1. **Subscriptions**: list showing subscription number, plan, cycle, status badge, start/next billing dates, amount in ₹.
-      2. **Invoices**: list showing invoice number, issue date, due date, status badge (including overdue detection), total, balance due in ₹.
-      3. **Payments**: list showing payment number, linked invoice, method, amount paid in ₹, paid date, and notes.
-    - Inline Edit Customer profile modal.
-- **Staff Management (`StaffPage.jsx`)**:
-  - Admin-only access protected by `RoleRoute`.
-  - List of staff members with name, email, role, status badges, and registration dates.
-  - Search bar and pagination.
-  - "Add Staff Member" modal with strict password criteria validation checklist.
-  - One-click Activate / Deactivate toggle button hitting `PATCH /api/admin/staff/:id/toggle`.
-- **Dashboard Shell (`DashboardPage.jsx`)**:
-  - Six standard SaaS metric cards: Active Subscriptions, MRR (₹), ARR (₹), Total Revenue Collected (₹), Outstanding Payments (₹), and Overdue Invoices.
-  - Recent Customers live feed loaded dynamically from `/api/customers?limit=5`.
-  - Quick action buttons to navigate directly to Customer, Quotation, and Subscription flows.
-- **Seed Script Enhanced (`backend/scripts/seed.js`)**:
-  - Idempotent execution verified.
-  - Seeded 10 realistic Indian customer accounts across diverse states (Maharashtra, Karnataka, Haryana, Telangana, Tamil Nadu, Gujarat, Delhi, Rajasthan) with corporate entities (TechVista, Nexa Group, SoftCraft, InfraEdge, DataBridge, CloudPlex, BuildFast, FinEdge, Singh Enterprises, Desai Technologies).
-  - 2 customer accounts configured with portal access.
-- **Test Suite Expanded (`backend/tests/customer.test.js`)**:
-  - Comprehensive integration tests for customers API:
-    - Unauthenticated request rejected (401).
-    - Customer role blocked from listing all customers (403).
-    - Admin and staff can list and search customers.
-    - Pagination metadata verified.
-    - Valid customer creation and duplicate email rejection (409).
-    - Customer updates.
-    - Customer deletion blocked when subscriptions exist (400).
-    - Customer deletion succeeds when no dependencies exist (200).
-    - Customer role can access own sub-resources but is blocked (403) from accessing another customer's data.
-  - **All 24/24 Jest tests passing across both suites (`auth.test.js` & `customer.test.js`)**.
+  - Full CRUD API at `/api/customers` with Zod validation.
+  - Regex search across name, email, company, and phone.
+  - Pagination metadata.
+  - Deletion blocked if active subscriptions or invoices exist.
+  - Sub-resources: `/api/customers/:id/subscriptions`, `/invoices`, `/payments`.
+  - Strict customer-role access isolation via JWT `customerId`.
+- **Frontend Customers Module**:
+  - `CustomersPage.jsx`: DataTable with search, filters, pagination, add/edit modal, delete confirmation.
+  - `CustomerDetailPage.jsx`: Full customer profile, quick metric cards, Subscriptions tab, Invoices tab, Payments tab.
+- **Staff Management**:
+  - `StaffPage.jsx`: Admin-only view with member list, role badges, activation toggles, and modal with live security checklist.
+- **Dashboard Shell**:
+  - `DashboardPage.jsx`: Six SaaS metric cards and live recent customer list.
+- **Seed Script Enhanced**:
+  - 1 Admin, 2 Staff, and 10 realistic Indian customer accounts seeded idempotently.
+- **Test Suite**:
+  - 24/24 tests passing across auth and customer integration suites.
+
+---
+
+## Phase 3: Catalog, Plans, Taxes, Discounts — COMPLETED
+
+### 1. Done in Phase 3
+- **Role-Based Access Control**:
+  - Taxes, Products, Plans, and Discounts: Staff can read (GET), Admin has exclusive write access (POST, PUT, PATCH, DELETE), Customers have no access (403).
+- **Taxes Module (`/api/taxes`)**:
+  - Full CRUD with active status toggle (`PATCH /api/taxes/:id/toggle`).
+  - Validation ensures tax percentage is between 0 and 100.
+  - `TaxesPage.jsx`: Interactive table, active status toggle, add/edit modal, delete confirmation.
+- **Products & Variants Module (`/api/products`)**:
+  - Full CRUD for products (name, type, sales price, cost price, notes, default tax rule, archived).
+  - Product variants management: attribute, value, and extra price with compound unique index on `(product, attribute, value)`.
+  - `ProductsPage.jsx`:
+    - Search by name, filter by product type, pagination.
+    - Add/Edit modal with dynamic variant rows (e.g. Brand: Odoo Edition +₹560).
+    - **Interactive Price Calculator**: Pick any product and variant, adjust quantity, and observe live calculation proving:
+      `Effective Unit Price = Base Sales Price + Variant Extra Price`
+      `Example: ₹1,000 (Base) + ₹560 (Odoo Brand) = ₹1,560 Unit Price`
+      Displays tax calculation and grand total in INR (₹).
+- **Subscription Plans Module (`/api/plans`)**:
+  - Full CRUD with billing periods (`daily`, `weekly`, `monthly`, `yearly`), minimum quantity thresholds, and availability windows.
+  - Backend validation: `availableTo` must be after `availableFrom`.
+  - Policy flags support: `autoClose`, `allowEarlyClose`, `allowPause`, `allowRenew`, and `active`.
+  - `availableAsOf` query filter to find active plans at a specific date.
+  - `PlansPage.jsx`: Search, billing cycle filters, flag badges (`Auto-Close`, `Pause OK`, `Early Close`, `Renewable`), add/edit modal.
+- **Discounts Module (`/api/discounts`)**:
+  - Full CRUD (Admin only to write).
+  - Types: `fixed` or `percent` (0-100 validated).
+  - Scope: `product` or `subscription`.
+  - Backend validation: `endDate` must be after `startDate`, and `usageLimit` cannot be lowered below existing `timesUsed`.
+  - Dynamic computed status evaluator: `active`, `scheduled`, `expired`, `exhausted`, `inactive`.
+  - `DiscountsPage.jsx`: Search, type & scope filters, usage tracking (`timesUsed / usageLimit`), computed status badges, add/edit modal.
+- **Discount Eligibility Engine (`services/discountEligibility.js`)**:
+  - Evaluates discount eligibility against purchase criteria (subtotal, quantity, product scope, subscription scope, date range, usage limits).
+  - `tests/discountEligibility.test.js`: 8 unit tests covering active, inactive, not started (scheduled), expired, exhausted, below minimum quantity, below minimum purchase, and product-scoped matching.
+- **Seed Data**:
+  - 3 Taxes: `GST 18%`, `GST 5%`, `Exempt 0%`.
+  - 5 Products with realistic variants (including `Business Software Suite` with `Odoo Edition` +₹560).
+  - 4 Subscription Plans (Startup Daily, Growth Weekly with auto-close without pause, Enterprise Monthly with all flags enabled, Corporate Annual).
+  - 5 Discounts: 10% at 10+ seats, ₹500 off above ₹5,000, Expired Festive Offer 2025, Exhausted Early Adopter, Scheduled New Year 2027.
+- **Integration Tests**:
+  - `backend/tests/catalog.test.js` covering tax, product, plan, and discount rules.
+  - **All 41/41 tests passing across 4 suites** (`auth.test.js`, `customer.test.js`, `catalog.test.js`, `discountEligibility.test.js`).
   - Frontend production build succeeds with 0 errors via `npm run build`.
 
 ---
 
-### 2. Files Created & Modified in Phase 2
-- `backend/src/controllers/customerController.js` (NEW)
-- `backend/src/routes/customers.js` (NEW)
-- `backend/src/app.js` (MODIFIED: mounted `/api/customers`)
-- `backend/tests/customer.test.js` (NEW)
-- `backend/scripts/seed.js` (MODIFIED: enhanced Indian customer locations and idempotency)
-- `frontend/src/api/customers.js` (NEW)
-- `frontend/src/api/staff.js` (NEW)
-- `frontend/src/pages/CustomersPage.jsx` (MODIFIED: full CRUD UI with search, modals, pagination)
-- `frontend/src/pages/CustomerDetailPage.jsx` (MODIFIED: profile, stats, Subscriptions/Invoices/Payments tabs)
-- `frontend/src/pages/StaffPage.jsx` (MODIFIED: full staff management with invite & status toggle)
-- `frontend/src/pages/DashboardPage.jsx` (MODIFIED: metric cards & recent customers live feed)
-- `.gitignore` (MODIFIED: ignore local mongo data/ and binaries)
+### 2. Files Created & Modified in Phase 3
+- `backend/src/services/discountEligibility.js` (NEW: status evaluator & eligibility engine)
+- `backend/src/controllers/taxController.js` (NEW)
+- `backend/src/routes/taxes.js` (NEW)
+- `backend/src/controllers/productController.js` (NEW)
+- `backend/src/routes/products.js` (NEW)
+- `backend/src/controllers/planController.js` (NEW)
+- `backend/src/routes/plans.js` (NEW)
+- `backend/src/controllers/discountController.js` (NEW)
+- `backend/src/routes/discounts.js` (NEW)
+- `backend/src/app.js` (MODIFIED: mounted catalog routes)
+- `backend/scripts/seed.js` (MODIFIED: seeded complete catalog, plans, taxes, discounts)
+- `backend/tests/discountEligibility.test.js` (NEW)
+- `backend/tests/catalog.test.js` (NEW)
+- `frontend/src/api/catalog.js` (NEW: axios endpoints for taxes, products, plans, discounts)
+- `frontend/src/pages/TaxesPage.jsx` (MODIFIED: full CRUD & toggle UI)
+- `frontend/src/pages/ProductsPage.jsx` (MODIFIED: products, variants & interactive price calculator)
+- `frontend/src/pages/PlansPage.jsx` (MODIFIED: plans, policy flags, availability window)
+- `frontend/src/pages/DiscountsPage.jsx` (MODIFIED: discounts, computed status, threshold rules)
 
 ---
 
@@ -138,14 +136,39 @@ Currency: INR (₹)
 | POST | `/api/admin/staff` | Admin | Create new staff user |
 | GET | `/api/admin/staff` | Admin | List staff members with pagination |
 | PATCH | `/api/admin/staff/:id/toggle` | Admin | Toggle staff active status |
-| GET | `/api/customers` | Admin, Staff | List customers with search, city/state filter & pagination |
+| GET | `/api/customers` | Admin, Staff | List customers with search & pagination |
 | POST | `/api/customers` | Admin, Staff | Create a new customer |
 | GET | `/api/customers/:id` | Admin, Staff, Customer (scoped) | Retrieve customer profile |
 | PUT | `/api/customers/:id` | Admin, Staff | Update customer profile |
-| DELETE | `/api/customers/:id` | Admin, Staff | Delete customer (blocked if subscriptions/invoices exist) |
+| DELETE | `/api/customers/:id` | Admin, Staff | Delete customer (blocked if subscriptions exist) |
 | GET | `/api/customers/:id/subscriptions` | Admin, Staff, Customer (scoped) | List customer's subscriptions |
 | GET | `/api/customers/:id/invoices` | Admin, Staff, Customer (scoped) | List customer's invoices |
 | GET | `/api/customers/:id/payments` | Admin, Staff, Customer (scoped) | List customer's payments |
+| GET | `/api/taxes` | Admin, Staff | List tax rates with filter |
+| POST | `/api/taxes` | Admin | Create new tax rate |
+| PUT | `/api/taxes/:id` | Admin | Update tax rate |
+| PATCH | `/api/taxes/:id/toggle` | Admin | Toggle tax active status |
+| DELETE | `/api/taxes/:id` | Admin | Delete tax rate |
+| GET | `/api/products` | Admin, Staff | List products with variants & tax populated |
+| POST | `/api/products` | Admin | Create product with variants |
+| GET | `/api/products/:id` | Admin, Staff | Get product with variants |
+| PUT | `/api/products/:id` | Admin | Update product |
+| DELETE | `/api/products/:id` | Admin | Archive product |
+| POST | `/api/products/:id/variants` | Admin | Add variant to product |
+| PUT | `/api/products/:id/variants/:variantId` | Admin | Update product variant |
+| DELETE | `/api/products/:id/variants/:variantId` | Admin | Delete product variant |
+| GET | `/api/plans` | Admin, Staff | List subscription plans with filters |
+| POST | `/api/plans` | Admin | Create subscription plan |
+| GET | `/api/plans/:id` | Admin, Staff | Get subscription plan |
+| PUT | `/api/plans/:id` | Admin | Update subscription plan |
+| PATCH | `/api/plans/:id/toggle` | Admin | Toggle plan active status |
+| DELETE | `/api/plans/:id` | Admin | Delete subscription plan |
+| GET | `/api/discounts` | Admin, Staff | List discounts with computed status |
+| POST | `/api/discounts` | Admin | Create discount rule |
+| GET | `/api/discounts/:id` | Admin, Staff | Get discount rule |
+| PUT | `/api/discounts/:id` | Admin | Update discount rule |
+| PATCH | `/api/discounts/:id/toggle` | Admin | Toggle discount active status |
+| DELETE | `/api/discounts/:id` | Admin | Delete or mark inactive discount |
 | GET | `/api/health` | Public | Healthcheck endpoint |
 
 ---
@@ -193,13 +216,13 @@ All demo passwords follow the strict policy (`>= 9 chars`, uppercase, lowercase,
 2. **Run Backend**:
    ```bash
    cd backend
-   npm run seed    # Seeds demo admin, staff, and 10 realistic Indian customers
+   npm run seed    # Seeds demo admin, staff, 10 customers, products, plans, taxes, discounts
    npm start       # Runs on http://localhost:5000
    ```
 3. **Run Tests**:
    ```bash
    cd backend
-   npm test        # Runs all 24 Jest integration tests (auth.test.js & customer.test.js)
+   npm test        # Runs all 41 Jest tests across 4 suites
    ```
 4. **Run Frontend**:
    ```bash
@@ -207,12 +230,11 @@ All demo passwords follow the strict policy (`>= 9 chars`, uppercase, lowercase,
    npm run dev     # Runs on http://localhost:5173
    ```
 5. **Test in Browser**:
-   - Visit `http://localhost:5173/login`
-   - Sign in as Admin (`admin@loopledger.dev` / `Admin@1234!`) -> Redirects to `/dashboard`
-   - In Sidebar, click **Customers** -> View customer list, search by name/company/email, click **Add Customer**
-   - Click any customer row -> View profile details, Subscriptions tab, Invoices tab, Payments tab
-   - In Sidebar, click **Staff** -> View staff members, invite a new staff member, test status toggle
-   - Sign in as Customer (`pooja@loopledger.dev` / `Customer@1234!`) -> Redirects to `/portal`
+   - Sign in as Admin (`admin@loopledger.dev` / `Admin@1234!`).
+   - Navigate to **Catalog > Products** -> View Business Software Suite, click **Price Check** -> test base ₹1,000 + Odoo Brand (+₹560) = ₹1,560.
+   - Navigate to **Catalog > Plans** -> View Daily, Weekly, Monthly, Yearly plans and their policy badges.
+   - Navigate to **Catalog > Taxes** -> View GST 18%, GST 5%, Exempt 0%, test toggle and add.
+   - Navigate to **Catalog > Discounts** -> View computed statuses: `active`, `scheduled`, `expired`, `exhausted`.
 
 ---
 
@@ -222,12 +244,13 @@ All demo passwords follow the strict policy (`>= 9 chars`, uppercase, lowercase,
 
 ---
 
-### 7. What is Next (Phase 3)
-The next phase is **Phase 3: Catalog, Plans, Taxes, Discounts**:
-- Admin writes, staff reads, customers none.
-- Taxes CRUD with active toggle (GST 18%, GST 5%, Exempt 0%).
-- Products CRUD (name, type, sales price, cost price, notes, default tax, archive), variants add and remove, search and filters, and price calculator (base ₹1,000 + Odoo +₹560 shows ₹1,560).
-- Plans CRUD with every field and flag (`autoClose`, `allowEarlyClose`, `allowPause`, `allowRenew`, `active`), availableTo after availableFrom validation, flag badges, filters.
-- Discounts (admin only to write): fixed or percent (0 to 100), minimum purchase, minimum quantity, dates, usage limit, scope product or subscription; backend validation; list shows computed status (active, scheduled, expired, exhausted) and used/limit.
-- Build `services/discountEligibility.js` with unit tests (expired, not started, exhausted, below minimum quantity, below minimum purchase).
-- Seed: 5 products with variants (including Business Software with Odoo +560), daily, weekly, monthly and yearly plans (one auto-close without pause, one with all flags on), taxes (GST 18%, GST 5%, Exempt 0%), discounts (10% at 10+ seats, fixed ₹500 above ₹5,000, one expired, one exhausted, one scheduled).
+### 7. Next Phase (Phase 4) – To be completed by teammate
+The next phase is **Phase 4: Pricing Engine, Quotations, Subscriptions**:
+- Single pricing engine `services/pricingEngine.js quote({lines, planId, customerId, asOf})`. Unit price = product sales price + variant extra price; enforce plan minQty; eligible product-scoped discounts to lines, then subscription-scoped discounts; tax on discounted amount. Expose `POST /api/pricing/quote`.
+- Audit service `services/audit.js` and `GET /api/history/:entityType/:entityId`.
+- Quotation templates CRUD.
+- Quotations: from template or scratch, QUO number, validUntil = today + validityDays, live totals, draft -> quotation -> confirmed, expired ones cannot be confirmed; `POST /api/quotations/:id/confirm` creates subscription and links both.
+- Subscriptions: SUB number, customer, plan, start, expiry, payment terms, lines, billing interval, next billing date; state machine draft -> quotation -> confirmed -> active -> closed plus active <-> paused; activating sets nextBillingDate = startDate and writes MrrChange new; endpoints transition, pause, resume, close (writes MrrChange churn), renew; flags enforced.
+- Daily cron `jobs/autoClose.js` closes active subscriptions past expiry when plan has autoClose.
+- UI: templates, quotations list & editor with live totals, subscriptions list & details page with lifecycle stepper, action buttons, lines table, audit Timeline.
+- Seed: 3 templates, quotations in each status, at least 25 subscriptions spread over 6 months with history and MrrChange.

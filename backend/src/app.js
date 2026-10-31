@@ -8,6 +8,10 @@ const { errorHandler } = require('./middleware/errorHandler');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const customerRoutes = require('./routes/customers');
+const taxRoutes = require('./routes/taxes');
+const productRoutes = require('./routes/products');
+const planRoutes = require('./routes/plans');
+const discountRoutes = require('./routes/discounts');
 
 const app = express();
 
@@ -33,6 +37,10 @@ app.use('/api', rateLimit({
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/taxes', taxRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/plans', planRoutes);
+app.use('/api/discounts', discountRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

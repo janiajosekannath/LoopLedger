@@ -8,6 +8,10 @@ const bcrypt = require('bcrypt');
 
 const User = require('../src/models/User');
 const Customer = require('../src/models/Customer');
+const Tax = require('../src/models/Tax');
+const { Product, ProductVariant } = require('../src/models/Product');
+const SubscriptionPlan = require('../src/models/SubscriptionPlan');
+const Discount = require('../src/models/Discount');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/loopledger';
 
@@ -73,7 +77,6 @@ const DEMO_CUSTOMERS = [
     company: 'FinEdge Capital Partners',
     address: { line1: 'Barakhamba Road Connaught Place', city: 'New Delhi', state: 'Delhi', pincode: '110001', country: 'India' },
   },
-  // Two with customer portal logins
   {
     name: 'Pooja Singh',
     email: 'pooja@loopledger.dev',
@@ -147,10 +150,276 @@ async function seedUsers() {
         console.log(`Created customer: ${c.email}`);
       }
     } else {
-      // Update address if missing or update
       customer.address = c.address;
       await customer.save();
       console.log(`Customer updated: ${c.email}`);
+    }
+  }
+}
+
+async function seedCatalog() {
+  console.log('\n--- Seeding Catalog (Taxes, Products, Variants, Plans, Discounts) ---');
+
+  // 1. Taxes
+  const taxesData = [
+    { name: 'GST 18%', percent: 18, description: 'Standard GST on Cloud & IT SaaS Services', active: true },
+    { name: 'GST 5%', percent: 5, description: 'Concessional essential digital services', active: true },
+    { name: 'Exempt 0%', percent: 0, description: 'Export of services / Special SEZ exemptions', active: true },
+  ];
+
+  const taxMap = {};
+  for (const t of taxesData) {
+    let tax = await Tax.findOne({ name: t.name });
+    if (!tax) {
+      tax = await Tax.create(t);
+      console.log(`Created tax: ${t.name}`);
+    } else {
+      tax.percent = t.percent;
+      tax.description = t.description;
+      await tax.save();
+      console.log(`Tax updated: ${t.name}`);
+    }
+    taxMap[t.name] = tax;
+  }
+
+  // 2. Products & Variants (including Business Software with Odoo +560)
+  const productsData = [
+    {
+      name: 'Business Software Suite',
+      type: 'subscription',
+      salesPrice: 1000,
+      costPrice: 400,
+      notes: 'Integrated enterprise resource planning, invoicing and inventory suite.',
+      tax: taxMap['GST 18%']._id,
+      variants: [
+        { attribute: 'Brand', value: 'Odoo Edition', extraPrice: 560 }, // 1000 + 560 = 1560
+        { attribute: 'Brand', value: 'Standard Open Source', extraPrice: 0 },
+      ],
+    },
+    {
+      name: 'Cloud Compute Instance',
+      type: 'service',
+      salesPrice: 2500,
+      costPrice: 1200,
+      notes: 'High-availability compute nodes hosted in Mumbai & Hyderabad data centers.',
+      tax: taxMap['GST 18%']._id,
+      variants: [
+        { attribute: 'Config', value: '4 vCPU / 16GB RAM', extraPrice: 1500 },
+        { attribute: 'Config', value: '2 vCPU / 8GB RAM', extraPrice: 0 },
+      ],
+    },
+    {
+      name: 'Priority Support Desk',
+      type: 'service',
+      salesPrice: 800,
+      costPrice: 300,
+      notes: 'Direct 15-minute SLA ticketing with dedicated technical account manager.',
+      tax: taxMap['GST 18%']._id,
+      variants: [
+        { attribute: 'Tier', value: '24x7 Dedicated TAM', extraPrice: 1200 },
+        { attribute: 'Tier', value: 'Business Hours', extraPrice: 0 },
+      ],
+    },
+    {
+      name: 'Enterprise SSL & Security Shield',
+      type: 'digital',
+      salesPrice: 400,
+      costPrice: 150,
+      notes: 'Automated TLS wildcard certificate with DDoS mitigation layer.',
+      tax: taxMap['GST 18%']._id,
+      variants: [
+        { attribute: 'Coverage', value: 'Multi-Domain Wildcard', extraPrice: 600 },
+        { attribute: 'Coverage', value: 'Single Domain', extraPrice: 0 },
+      ],
+    },
+    {
+      name: 'Automated Cloud Vault Backup',
+      type: 'digital',
+      salesPrice: 600,
+      costPrice: 200,
+      notes: 'Daily snapshot backups with geo-redundant storage in Bangalore.',
+      tax: taxMap['GST 5%']._id,
+      variants: [
+        { attribute: 'Storage', value: '1 TB Encrypted Storage', extraPrice: 400 },
+        { attribute: 'Storage', value: '500 GB Encrypted Storage', extraPrice: 0 },
+      ],
+    },
+  ];
+
+  const productMap = {};
+  for (const p of productsData) {
+    let product = await Product.findOne({ name: p.name });
+    if (!product) {
+      product = await Product.create({
+        name: p.name,
+        type: p.type,
+        salesPrice: p.salesPrice,
+        costPrice: p.costPrice,
+        notes: p.notes,
+        tax: p.tax,
+        archived: false,
+      });
+      console.log(`Created product: ${p.name}`);
+    } else {
+      product.salesPrice = p.salesPrice;
+      product.costPrice = p.costPrice;
+      product.tax = p.tax;
+      await product.save();
+      console.log(`Product updated: ${p.name}`);
+    }
+    productMap[p.name] = product;
+
+    // Seed Variants
+    for (const v of p.variants) {
+      let variant = await ProductVariant.findOne({
+        product: product._id,
+        attribute: v.attribute,
+        value: v.value,
+      });
+      if (!variant) {
+        await ProductVariant.create({
+          product: product._id,
+          attribute: v.attribute,
+          value: v.value,
+          extraPrice: v.extraPrice,
+        });
+        console.log(`  Created variant: ${v.attribute} - ${v.value} (+₹${v.extraPrice})`);
+      } else {
+        variant.extraPrice = v.extraPrice;
+        await variant.save();
+      }
+    }
+  }
+
+  // 3. Subscription Plans (daily, weekly, monthly, yearly)
+  const plansData = [
+    {
+      name: 'Startup Daily Plan',
+      product: productMap['Business Software Suite']._id,
+      price: 100,
+      billingPeriod: 'daily',
+      minQty: 1,
+      autoClose: false,
+      allowEarlyClose: true,
+      allowPause: true,
+      allowRenew: true,
+      active: true,
+    },
+    {
+      name: 'Growth Weekly Plan',
+      product: productMap['Cloud Compute Instance']._id,
+      price: 600,
+      billingPeriod: 'weekly',
+      minQty: 2,
+      autoClose: true, // Auto-close without pause as required by spec
+      allowEarlyClose: true,
+      allowPause: false,
+      allowRenew: true,
+      active: true,
+    },
+    {
+      name: 'Enterprise Monthly Plan',
+      product: productMap['Business Software Suite']._id,
+      price: 2500,
+      billingPeriod: 'monthly',
+      minQty: 5,
+      autoClose: false,
+      allowEarlyClose: true,
+      allowPause: true, // All flags enabled
+      allowRenew: true,
+      active: true,
+    },
+    {
+      name: 'Corporate Annual Plan',
+      product: productMap['Cloud Compute Instance']._id,
+      price: 25000,
+      billingPeriod: 'yearly',
+      minQty: 10,
+      autoClose: true,
+      allowEarlyClose: true,
+      allowPause: true,
+      allowRenew: true,
+      active: true,
+    },
+  ];
+
+  for (const pl of plansData) {
+    let plan = await SubscriptionPlan.findOne({ name: pl.name });
+    if (!plan) {
+      await SubscriptionPlan.create(pl);
+      console.log(`Created plan: ${pl.name} (${pl.billingPeriod} - ₹${pl.price})`);
+    } else {
+      Object.assign(plan, pl);
+      await plan.save();
+      console.log(`Plan updated: ${pl.name}`);
+    }
+  }
+
+  // 4. Discounts (10% at 10+ seats, fixed ₹500 above ₹5,000, one expired, one exhausted, one scheduled)
+  const discountsData = [
+    {
+      name: '10% at 10+ Seats',
+      type: 'percent',
+      value: 10,
+      minQty: 10,
+      minPurchase: 0,
+      scope: 'subscription',
+      active: true,
+      usageLimit: null,
+      timesUsed: 0,
+    },
+    {
+      name: '₹500 Off Above ₹5,000',
+      type: 'fixed',
+      value: 500,
+      minPurchase: 5000,
+      minQty: 1,
+      scope: 'subscription',
+      active: true,
+      usageLimit: null,
+      timesUsed: 0,
+    },
+    {
+      name: 'Expired Festive Offer 2025',
+      type: 'percent',
+      value: 15,
+      minPurchase: 1000,
+      startDate: new Date('2025-10-01'),
+      endDate: new Date('2025-12-31'), // In past -> expired
+      scope: 'subscription',
+      active: true,
+      timesUsed: 12,
+    },
+    {
+      name: 'Exhausted Early Adopter',
+      type: 'fixed',
+      value: 200,
+      usageLimit: 5,
+      timesUsed: 5, // Exhausted
+      scope: 'subscription',
+      active: true,
+    },
+    {
+      name: 'Scheduled New Year 2027',
+      type: 'percent',
+      value: 20,
+      startDate: new Date('2027-01-01'), // Future -> scheduled
+      endDate: new Date('2027-01-31'),
+      scope: 'subscription',
+      active: true,
+      timesUsed: 0,
+    },
+  ];
+
+  for (const d of discountsData) {
+    let disc = await Discount.findOne({ name: d.name });
+    if (!disc) {
+      await Discount.create(d);
+      console.log(`Created discount: ${d.name} (${d.type === 'percent' ? d.value + '%' : '₹' + d.value})`);
+    } else {
+      Object.assign(disc, d);
+      await disc.save();
+      console.log(`Discount updated: ${d.name}`);
     }
   }
 }
@@ -161,6 +430,7 @@ async function main() {
   console.log('Connected.');
 
   await seedUsers();
+  await seedCatalog();
 
   console.log('\n========================================');
   console.log('DEMO CREDENTIALS');
