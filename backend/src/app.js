@@ -53,6 +53,10 @@ app.use('/api/quotation-templates', templateRoutes);
 app.use('/api/quotations', quotationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
+// Billing endpoints
+app.use('/api/billing', billingRoutes);
+app.use('/api/billing-runs', billingRunsRoutes);
+
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -66,5 +70,9 @@ app.use((req, res) => {
 
 // Central error handler
 app.use(errorHandler);
+
+// Billing routes
+const billingRoutes = require('./routes/billing');
+app.use('/api/billing', billingRoutes);
 
 module.exports = app;

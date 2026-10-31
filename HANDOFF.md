@@ -259,7 +259,7 @@ npm run dev
 ---
 
 ### 6. Roadmap to Completion (Phases 5 – 9)
-1. **Phase 5: Billing Engine, Time Machine, Invoices**:
+1. **Phase 5: Billing Engine, Time Machine, Invoices – COMPLETED**:
    - `services/billingPeriods.js` (unbilled periods catch-up).
    - `services/billingEngine.js` with `BillingPeriod` unique index claim guard to guarantee zero double billing.
    - `POST /api/billing/run` (dryRun, asOf).
