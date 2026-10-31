@@ -1,290 +1,168 @@
 # LoopLedger Handoff Document
 
 ## Project Overview
-**Brightloop Subscription Management System (LoopLedger)**
-Tagline: *Subscription billing you can prove is correct*
-Currency: INR (₹)
+**Brightloop Subscription Management System (LoopLedger)**  
+Tagline: *Subscription billing you can prove is correct*  
+Currency: INR (₹)  
+Status: **ALL 9 PHASES COMPLETE & FULLY OPERATIONAL**
 
 ---
 
 ## Phase 1: Foundation, Models, Auth — COMPLETED
-
-### 1. Done in Phase 1
-- **Repository Architecture & Docker**:
-  - `docker-compose.yml` defining `mongo` (standalone, no replica set requirement), `backend`, and `frontend`.
-  - `.env.example` with all configuration parameters (`PORT`, `MONGO_URI`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CLIENT_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`).
-  - `.gitignore` preventing secrets, `.env`, logs, and node_modules from being committed.
-- **Backend Core**:
-  - Express app with `helmet`, `cors` bound to `CLIENT_URL`, central `errorHandler`, `asyncHandler` wrapper.
-  - Rate limiting on `/api/auth` (20 req / 15 min) and `/api` general (500 req / 15 min).
-  - Sequence generation utility `utils/sequence.js` with atomic `Counter` collection for formatted doc IDs (`SUB-000001`, `QUO-000001`, `INV-000001`, `PAY-000001`).
-  - Currency rounding utility `utils/money.js` with `round2`.
-  - Email notification system in `config/mailer.js` supporting SMTP with automatic Ethereal test account fallback for local dev.
-- **Data Models (all 14 models defined with schemas, indexes, and validations)**:
-  - `User`, `Customer`, `Product`, `ProductVariant`, `SubscriptionPlan`, `Tax`, `Discount`, `QuotationTemplate`, `Quotation`, `Subscription`, `Invoice`, `Payment`, `BillingPeriod`, `BillingRun`, `StatusHistory`, `ReminderLog`, `MrrChange`, `Counter`.
-- **Authentication & Admin API**:
-  - Strict password validation: >= 9 characters, >= 1 uppercase, >= 1 lowercase, >= 1 special character.
-  - Public signup, login, password reset with single-use tokens.
-  - Staff management endpoints for admin.
-- **Frontend Core**:
-  - Vite + React 18 + Tailwind CSS + React Router v6 + TanStack Query + Axios.
-  - Shared UI components: `DataTable`, `Pagination`, `Modal`, `ConfirmDialog`, `StatusBadge`, `StatCard`, `PageHeader`, `EmptyState`, `Spinner`, `FormField`, `SearchInput`, `Toast`, `Timeline`.
+- Repository architecture, Docker Compose (`mongo`, `backend`, `frontend`), `.env.example`, `.gitignore`.
+- Express app with `helmet`, `cors`, rate-limiting, central `errorHandler`, and `asyncHandler`.
+- Sequence generation utility (`utils/sequence.js`) with atomic `Counter` collection (`SUB-xxxxxx`, `QUO-xxxxxx`, `INV-xxxxxx`, `PAY-xxxxxx`).
+- Currency rounding utility (`utils/money.js`) with `round2`.
+- All 18 Mongoose data models defined with schemas, indexes, and validations.
+- Authentication API with strict password policy (>= 9 characters, uppercase, lowercase, special char), single-use reset tokens, and Ethereal fallback.
 
 ---
 
 ## Phase 2: UI Shell, Shared Components, Customers, Staff — COMPLETED
-
-### 1. Done in Phase 2
-- **Backend Customers Module**:
-  - Full CRUD API at `/api/customers` with Zod validation.
-  - Regex search across name, email, company, and phone.
-  - Pagination metadata.
-  - Deletion blocked if active subscriptions or invoices exist.
-  - Sub-resources: `/api/customers/:id/subscriptions`, `/invoices`, `/payments`.
-  - Strict customer-role access isolation via JWT `customerId`.
-- **Frontend Customers Module**:
-  - `CustomersPage.jsx`: DataTable with search, filters, pagination, add/edit modal, delete confirmation.
-  - `CustomerDetailPage.jsx`: Full customer profile, quick metric cards, Subscriptions tab, Invoices tab, Payments tab.
-- **Staff Management**:
-  - `StaffPage.jsx`: Admin-only view with member list, role badges, activation toggles, and modal with live security checklist.
-- **Dashboard Shell**:
-  - `DashboardPage.jsx`: Six SaaS metric cards and live recent customer list.
-- **Seed Script Enhanced**:
-  - 1 Admin, 2 Staff, and 10 realistic Indian customer accounts seeded idempotently.
-- **Test Suite**:
-  - 24/24 tests passing across auth and customer integration suites.
+- Complete shared component system (`DataTable`, `Pagination`, `Modal`, `ConfirmDialog`, `StatusBadge`, `StatCard`, `PageHeader`, `EmptyState`, `Spinner`, `FormField`, `SearchInput`, `Toast`, `Timeline`).
+- Admin and Customer Portal layouts with mobile hamburger and role-based navigation.
+- Customers module with full CRUD, regex search, pagination, and sub-resource tabs.
+- Staff management module for Admin.
+- Dashboard shell with quick metric cards and live customer feed.
 
 ---
 
 ## Phase 3: Catalog, Plans, Taxes, Discounts — COMPLETED
-
-### 1. Done in Phase 3
-- **Role-Based Access Control**:
-  - Taxes, Products, Plans, and Discounts: Staff can read (GET), Admin has exclusive write access (POST, PUT, PATCH, DELETE), Customers have no access (403).
-- **Taxes Module (`/api/taxes`)**:
-  - Full CRUD with active status toggle (`PATCH /api/taxes/:id/toggle`).
-  - Validation ensures tax percentage is between 0 and 100.
-  - `TaxesPage.jsx`: Interactive table, active status toggle, add/edit modal, delete confirmation.
-- **Products & Variants Module (`/api/products`)**:
-  - Full CRUD for products (name, type, sales price, cost price, notes, default tax rule, archived).
-  - Product variants management: attribute, value, and extra price with compound unique index on `(product, attribute, value)`.
-  - `ProductsPage.jsx`:
-    - Search by name, filter by product type, pagination.
-    - Add/Edit modal with dynamic variant rows.
-    - **Interactive Price Calculator**: Pick any product and variant, adjust quantity, and observe live calculation proving:
-      `Effective Unit Price = Base Sales Price + Variant Extra Price`
-      `Example: ₹1,000 (Base) + ₹560 (Odoo Brand) = ₹1,560 Unit Price`
-- **Subscription Plans Module (`/api/plans`)**:
-  - Full CRUD with billing periods (`daily`, `weekly`, `monthly`, `yearly`), minimum quantity thresholds, and availability windows.
-  - Backend validation: `availableTo` must be after `availableFrom`.
-  - Policy flags support: `autoClose`, `allowEarlyClose`, `allowPause`, `allowRenew`, and `active`.
-  - `availableAsOf` query filter to find active plans at a specific date.
-  - `PlansPage.jsx`: Search, billing cycle filters, flag badges (`Auto-Close`, `Pause OK`, `Early Close`, `Renewable`), add/edit modal.
-- **Discounts Module (`/api/discounts`)**:
-  - Full CRUD (Admin only to write).
-  - Types: `fixed` or `percent` (0-100 validated). Scope: `product` or `subscription`.
-  - Dynamic computed status evaluator: `active`, `scheduled`, `expired`, `exhausted`, `inactive`.
-  - `DiscountsPage.jsx`: Search, type & scope filters, usage tracking (`timesUsed / usageLimit`), computed status badges, add/edit modal.
-- **Discount Eligibility Engine (`services/discountEligibility.js`)**:
-  - Evaluates discount eligibility against purchase criteria.
-  - 8 unit tests covering active, inactive, scheduled, expired, exhausted, below minQty, below minPurchase, product-scoped matching.
+- RBAC: Staff reads, Admin writes, Customers forbidden (403).
+- Taxes CRUD with active toggle and GST rates (18%, 5%, 0% exempt).
+- Products and variants with extra price calculation (e.g., ₹1,000 base + ₹560 Odoo = ₹1,560 effective price) and interactive price calculator.
+- Subscription Plans with billing intervals (`daily`, `weekly`, `monthly`, `yearly`), minimum quantity thresholds, and policy flags (`autoClose`, `allowEarlyClose`, `allowPause`, `allowRenew`).
+- Discounts module with fixed/percentage types, min purchase, min quantity, date windows, usage limits, dynamic status evaluation (`active`, `scheduled`, `expired`, `exhausted`), and `services/discountEligibility.js`.
 
 ---
 
 ## Phase 4: Pricing Engine, Quotations, Subscriptions, Payments, Auto-Close — COMPLETED
-
-### 1. Done in Phase 4
-- **Central Pricing Engine (`backend/src/services/pricingEngine.js`)**:
-  - Calculates accurate quotations, invoices, and subscriptions via `quote({ lines, planId, customerId, subscriptionId, asOf })`.
-  - Effective unit price rule: `unitPrice = product.salesPrice + variant.extraPrice`.
-  - Enforces `plan.minQty` requirements across lines.
-  - Applies eligible product-scoped discounts line-by-line first.
-  - Applies eligible subscription-scoped discounts to remaining subtotal.
-  - Calculates tax on discounted amount and rounds all values to 2 decimals using `round2`.
-  - Never increments discount `timesUsed` (deferred to actual invoice finalization).
-  - Exposed via `POST /api/pricing/quote`.
-- **Audit Service (`backend/src/services/audit.js`)**:
-  - Logs entity status changes into the `StatusHistory` collection (`recordStatusChange`).
-  - Exposed via `GET /api/history/:entityType/:entityId`.
-- **MRR Normalization & Change Tracking (`backend/src/services/mrr.js`)**:
-  - Normalizes MRR across intervals: `daily * 30`, `weekly * 52 / 12`, `monthly * 1`, `yearly / 12`.
-  - Records MRR movements (`new`, `expansion`, `contraction`, `churn`) in `MrrChange` collection with delta calculations.
-- **Quotation Templates Module (`/api/quotation-templates`)**:
-  - Full CRUD for reusable templates with validity days, linked plan, and line items (product, variant, quantity).
-  - `QuotationTemplatesPage.jsx`: Template cards/table, dynamic line items manager modal.
-- **Quotations Module (`/api/quotations`)**:
-  - Full lifecycle: `draft` -> `quotation` (sent) -> `confirmed` / `expired` / `cancelled`.
-  - Automatic `QUO-000001` sequence numbering.
-  - `validUntil` defaults to `now + validityDays`.
-  - Prevents confirming expired quotations.
-  - Direct conversion to subscription: `POST /api/quotations/:id/confirm` automatically creates a linked `SUB-xxxxxx` without data re-entry.
-  - `QuotationsPage.jsx`: Filter by status/customer, live quote price preview before submission.
-  - `QuotationDetailPage.jsx`: Full line-by-line breakdown, action buttons, live conversion, and audit history timeline.
-- **Subscriptions Module (`/api/subscriptions`)**:
-  - Full lifecycle: `draft` -> `quotation` -> `confirmed` -> `active` -> `closed` plus bidirectional `active` <-> `paused`.
-  - Automatic `SUB-000001` sequence numbering.
-  - Plan policy enforcement:
-    - `allowPause`: 400 Bad Request if pause attempted when plan disables it.
-    - `allowEarlyClose`: 400 Bad Request if closing before expiry date when plan disables it.
-    - `allowRenew`: 400 Bad Request if renewal attempted when plan disables it.
-  - Transition actions:
-    - **Activate**: Sets `nextBillingDate = startDate`, sets status to `active`, records `new` MRR change.
-    - **Pause / Resume**: Enforces `allowPause`, updates status and audit log.
-    - **Close**: Enforces `allowEarlyClose`, marks status `closed`, records `churn` MRR change.
-    - **Renew**: Extends expiry date based on plan interval.
-  - `SubscriptionsPage.jsx`: Filter by status, plan, customer, with MRR badges and date columns.
-  - `SubscriptionDetailPage.jsx`: Visual lifecycle stepper, policy enforcement badges, quick actions, lines table, and audit Timeline.
-- **Payments Module (`/api/payments`)**:
-  - Recording payments against invoices (`POST /api/payments`) with `PAY-000001` sequencing.
-  - Automatically updates invoice `amountPaid`, recomputes `balance`, and marks invoice `paid` or `partially_paid`.
-  - `PaymentsPage.jsx`: Interactive settlement form and payments ledger.
-- **Customer Portal**:
-  - `PortalSubscriptions.jsx` and `PortalSubscriptionDetail.jsx`: Customer-scoped subscription viewer with status badges, line items, and payment terms.
-- **Auto-Close Subscriptions Cron Job (`backend/src/jobs/autoClose.js`)**:
-  - Daily automated check (`0 0 * * *`) that closes active subscriptions whose `expiryDate` has passed and whose `plan.autoClose` is true.
-  - Records status transition in `StatusHistory` and records `churn` MRR change.
-- **Seed Data Enhanced**:
-  - 3 Quotation templates.
-  - 12 Quotations across diverse statuses (`draft`, `quotation`, `confirmed`, `expired`).
-  - 28 Realistic subscriptions spread over the past 6 months with diverse plans and full historical MRR changes.
-  - Sample invoice `INV-DEMO-001` with recorded partial payment.
-- **Testing & Verification**:
-  - Added test suites: `pricingEngine.test.js`, `quotation.test.js`, `subscription.test.js`, `payment.test.js`.
-  - **All 55 tests pass across all 8 test suites** (`npm test`).
-  - Frontend production build verified with 0 errors (`npm run build`).
+- Centralized pricing engine (`services/pricingEngine.js`) computing quotes, discounts, and taxes as the single source of truth.
+- Audit service (`services/audit.js`) logging entity status changes to `StatusHistory`.
+- MRR normalization and tracking service (`services/mrr.js`) logging `MrrChange` records (`new`, `expansion`, `contraction`, `churn`).
+- Quotation templates and full quotation lifecycle with one-click conversion to subscriptions.
+- Subscription state machine (`draft` $\to$ `quotation` $\to$ `confirmed` $\to$ `active` $\leftrightarrow$ `paused` $\to$ `closed`) enforcing plan flags.
+- Daily cron job (`jobs/autoClose.js`) closing expired subscriptions with `plan.autoClose: true`.
 
 ---
 
-### 2. Files Created & Modified in Phase 4
-- `backend/src/services/pricingEngine.js` (NEW: pricing engine with discounts, taxes, minQty)
-- `backend/src/services/audit.js` (NEW: audit logging to StatusHistory)
-- `backend/src/services/mrr.js` (NEW: MRR normalization & MrrChange logging)
-- `backend/src/jobs/autoClose.js` (NEW: cron job for auto-closing expired subscriptions)
-- `backend/src/controllers/pricingController.js` (NEW: pricing calculation endpoint)
-- `backend/src/routes/pricing.js` (NEW)
-- `backend/src/controllers/historyController.js` (NEW: entity history endpoint)
-- `backend/src/routes/history.js` (NEW)
-- `backend/src/controllers/templateController.js` (NEW: quotation templates CRUD)
-- `backend/src/routes/quotationTemplates.js` (NEW)
-- `backend/src/controllers/quotationController.js` (NEW: quotation CRUD & confirmation to SUB)
-- `backend/src/routes/quotations.js` (NEW)
-- `backend/src/controllers/subscriptionController.js` (NEW: subscription lifecycle & policy checks)
-- `backend/src/routes/subscriptions.js` (NEW)
-- `backend/src/controllers/paymentController.js` (NEW: payment recording & invoice balance update)
-- `backend/src/routes/payments.js` (NEW)
-- `backend/src/app.js` (MODIFIED: mounted Phase 4 routes)
-- `backend/src/server.js` (MODIFIED: scheduled daily auto-close cron)
-- `backend/scripts/seed.js` (MODIFIED: seeded templates, quotations, 28 subscriptions, invoice, payment)
-- `backend/tests/pricingEngine.test.js` (NEW: 7 unit tests)
-- `backend/tests/quotation.test.js` (NEW: 3 lifecycle integration tests)
-- `backend/tests/subscription.test.js` (NEW: 3 lifecycle & policy integration tests)
-- `backend/tests/payment.test.js` (NEW: 1 payment balance settlement test)
-- `frontend/src/api/pricing.js` (NEW)
-- `frontend/src/api/history.js` (NEW)
-- `frontend/src/api/quotationTemplates.js` (NEW)
-- `frontend/src/api/quotations.js` (NEW)
-- `frontend/src/api/subscriptions.js` (NEW)
-- `frontend/src/api/payments.js` (NEW)
-- `frontend/src/api/catalog.js` (MODIFIED: added `catalogApi` export)
-- `frontend/src/pages/QuotationTemplatesPage.jsx` (MODIFIED: templates table + editor)
-- `frontend/src/pages/QuotationsPage.jsx` (MODIFIED: quotations table + filter + live preview)
-- `frontend/src/pages/QuotationDetailPage.jsx` (MODIFIED: quote details + confirm button + audit)
-- `frontend/src/pages/SubscriptionsPage.jsx` (MODIFIED: subscriptions table + MRR + filters)
-- `frontend/src/pages/SubscriptionDetailPage.jsx` (MODIFIED: lifecycle stepper + policy badges + action buttons + audit)
-- `frontend/src/pages/PaymentsPage.jsx` (MODIFIED: payments table + settlement modal)
-- `frontend/src/pages/portal/PortalSubscriptions.jsx` (MODIFIED: customer view)
-- `frontend/src/pages/portal/PortalSubscriptionDetail.jsx` (MODIFIED: customer details view)
+## Phase 5: Billing Engine, Time Machine, Invoices — COMPLETED
+- Idempotent recurring billing engine (`services/billingEngine.js`) with atomic `BillingPeriod` unique index claim guard to guarantee zero double billing.
+- Catch-up period calculation across missed intervals (`services/billingPeriods.js`).
+- Billing Time Machine UI (`TimeMachinePage.jsx`) supporting dry runs and live runs against any future or past `asOf` date.
+- Invoices module with professional PDF generation via PDFKit (`/api/invoices/:id/pdf`).
 
 ---
 
-### 3. API Endpoints Available
+## Phase 6: Payments, Reminders, Collections & Customer Portal — COMPLETED
+- Payment settlement engine with atomic balance updates (`services/paymentProcessor.js`) and documented gateway stub (`services/paymentGateway.js`).
+- Automated dunning reminders (`jobs/paymentReminders.js`) with 3-day quiet period and `ReminderLog` audit trail.
+- Collections Cockpit page (`CollectionsPage.jsx`) with 4 overdue aging buckets (1–7, 8–30, 31–60, 60+ days) and individual remind/pay actions.
+- Customer Portal (`/portal/invoices`, `/portal/subscriptions`) with JWT-scoped access, PDF download, and online payment settlement.
+
+---
+
+## Phase 7: Reports, MRR Waterfall, Dashboard Analytics — COMPLETED
+- Aggregation pipelines (`services/reportsService.js`) for revenue, churn, ARPU, LTV, and collections.
+- Live MRR Waterfall report (`GET /api/reports/mrr-waterfall`) reconciling opening MRR, new activations, churn, and closing MRR.
+- Advanced Reports page (`ReportsPage.jsx`) with 3 tabs and interactive Recharts visualizations.
+- Interactive Dashboard (`DashboardPage.jsx`) with 6 live SaaS KPI cards, revenue charts, and recent activity feeds.
+
+---
+
+## Phase 8: Scale & Seed, SLA Benchmarks, Security Pass — COMPLETED
+- High-volume bulk seeder (`scripts/seedBulk.js --subs 10000`) generating 10,000 subscriptions, invoices, and payments in 1,000-doc batches.
+- Performance benchmark suite (`scripts/benchmark.js`) testing 10 critical workflows across 5 iterations against a 2,000 ms SLA threshold.
+- **Benchmark Results:** All 10 workflows passed with median latencies between 4 ms and 24 ms (see `docs/benchmark.md`).
+- Security test suite (`tests/security.test.js`) verifying route authentication traversal, RBAC enforcement, credential masking (`passwordHash` never leaked), and Helmet headers.
+- **13 Test Suites, 108 Tests, 100% Passing.**
+
+---
+
+## Phase 9: Polish, Packaging, Final QA — COMPLETED
+- Responsive design pass verified at mobile (360px), tablet (768px), and desktop (1280px).
+- Horizontal scroll guards on all data tables.
+- Comprehensive `README.md` with problem/solution, Mermaid architecture diagram, 10-step demo walkthrough, setup guides, and benchmark table.
+- Production build verified with zero errors (`npm run build`).
+
+---
+
+## API Endpoints Reference
+
 | Method | Path | Access | Description |
 |---|---|---|---|
-| POST | `/api/pricing/quote` | Admin, Staff | Calculate pricing, discounts, and taxes for lines |
-| GET | `/api/history/:entityType/:entityId` | Authenticated | Retrieve entity audit status history |
-| GET | `/api/quotation-templates` | Admin, Staff | List quotation templates |
-| POST | `/api/quotation-templates` | Admin | Create quotation template |
-| GET | `/api/quotation-templates/:id` | Admin, Staff | Get quotation template |
-| PUT | `/api/quotation-templates/:id` | Admin | Update quotation template |
-| DELETE | `/api/quotation-templates/:id` | Admin | Delete quotation template |
-| GET | `/api/quotations` | Admin, Staff, Customer (scoped) | List quotations with search & filters |
+| POST | `/api/auth/signup` | Public | Register customer account |
+| POST | `/api/auth/login` | Public | Authenticate user & get JWT |
+| GET | `/api/auth/me` | Authenticated | Get current session user profile |
+| POST | `/api/auth/forgot-password` | Public | Send single-use password reset token |
+| POST | `/api/auth/reset-password` | Public | Reset password with token |
+| GET | `/api/admin/staff` | Admin | List staff members |
+| POST | `/api/admin/staff` | Admin | Create new staff member |
+| PATCH | `/api/admin/staff/:id/toggle` | Admin | Activate/deactivate staff |
+| GET | `/api/customers` | Admin, Staff | List customers with search & pagination |
+| POST | `/api/customers` | Admin, Staff | Create customer |
+| GET | `/api/customers/:id` | Admin, Staff, Scoped | Get customer profile & metrics |
+| PUT | `/api/customers/:id` | Admin, Staff | Update customer |
+| DELETE | `/api/customers/:id` | Admin, Staff | Delete customer (blocked if active subs exist) |
+| GET | `/api/products` | Admin, Staff | List catalog products & variants |
+| POST | `/api/products` | Admin | Create product & variants |
+| GET | `/api/plans` | Admin, Staff | List subscription plans |
+| POST | `/api/plans` | Admin | Create subscription plan |
+| GET | `/api/taxes` | Admin, Staff | List tax rates |
+| POST | `/api/taxes` | Admin | Create tax rule |
+| GET | `/api/discounts` | Admin, Staff | List discounts with computed status |
+| POST | `/api/discounts` | Admin | Create discount rule |
+| POST | `/api/pricing/quote` | Admin, Staff | Single pricing engine calculation |
+| GET | `/api/history/:entityType/:entityId` | Authenticated | Audit status timeline |
+| GET | `/api/quotations` | Admin, Staff, Scoped | List quotations |
 | POST | `/api/quotations` | Admin, Staff | Create quotation |
-| GET | `/api/quotations/:id` | Admin, Staff, Customer (scoped) | Get quotation detail |
-| PUT | `/api/quotations/:id` | Admin, Staff | Update draft quotation |
-| PATCH | `/api/quotations/:id/send` | Admin, Staff | Mark quotation sent |
-| POST | `/api/quotations/:id/confirm` | Admin, Staff | Confirm quotation & generate linked subscription |
-| PATCH | `/api/quotations/:id/cancel` | Admin, Staff | Cancel quotation |
-| GET | `/api/subscriptions` | Admin, Staff, Customer (scoped) | List subscriptions with search & filters |
-| POST | `/api/subscriptions` | Admin, Staff | Create new subscription in draft status |
-| GET | `/api/subscriptions/:id` | Admin, Staff, Customer (scoped) | Get subscription detail |
-| PUT | `/api/subscriptions/:id` | Admin, Staff | Update subscription |
+| POST | `/api/quotations/:id/confirm` | Admin, Staff | Confirm quotation & generate subscription |
+| GET | `/api/subscriptions` | Admin, Staff, Scoped | List subscriptions |
 | POST | `/api/subscriptions/:id/activate` | Admin, Staff | Activate subscription (starts billing, logs MRR) |
-| POST | `/api/subscriptions/:id/pause` | Admin, Staff | Pause subscription (enforces `allowPause`) |
+| POST | `/api/subscriptions/:id/pause` | Admin, Staff | Pause subscription (enforces plan flag) |
 | POST | `/api/subscriptions/:id/resume` | Admin, Staff | Resume paused subscription |
-| POST | `/api/subscriptions/:id/close` | Admin, Staff | Close subscription (enforces `allowEarlyClose`, logs churn) |
-| POST | `/api/subscriptions/:id/renew` | Admin, Staff | Renew subscription (enforces `allowRenew`) |
-| GET | `/api/payments` | Admin, Staff, Customer (scoped) | List payments |
-| POST | `/api/payments` | Admin, Staff | Record payment against invoice |
+| POST | `/api/subscriptions/:id/close` | Admin, Staff | Close subscription (enforces plan flag) |
+| POST | `/api/subscriptions/:id/renew` | Admin, Staff | Renew subscription |
+| POST | `/api/billing/run` | Admin, Staff | Billing Time Machine (dryRun or live run) |
+| GET | `/api/invoices` | Admin, Staff, Scoped | List invoices with filters |
+| GET | `/api/invoices/:id/pdf` | Admin, Staff, Scoped | Download invoice PDFKit PDF |
+| POST | `/api/invoices/:id/send` | Admin, Staff | Send invoice email |
+| POST | `/api/invoices/:id/remind` | Admin, Staff | Send on-demand payment reminder |
+| POST | `/api/payments/:invoiceId/pay` | Admin, Staff, Scoped | Settle invoice payment |
+| GET | `/api/collections/aging` | Admin, Staff | Collections Cockpit 4 aging buckets |
+| GET | `/api/reports/summary` | Admin, Staff | Live MRR, ARR, ARPU, LTV, Churn KPIs |
+| GET | `/api/reports/mrr-waterfall` | Admin, Staff | Monthly MRR waterfall trend |
+| GET | `/api/reports/revenue` | Admin, Staff | Revenue analytics breakdown |
 
 ---
 
-### 4. Demo Logins
-All demo passwords follow the strict policy (`>= 9 chars`, uppercase, lowercase, special char):
+## Demo Credentials
 
 - **Super Admin**: `admin@loopledger.dev` / `Admin@1234!` (role: `admin`)
-- **Staff 1**: `staff1@loopledger.dev` / `Staff@1234!` (name: Priya Sharma, role: `staff`)
-- **Staff 2**: `staff2@loopledger.dev` / `Staff@5678!` (name: Rohit Verma, role: `staff`)
-- **Customer 1**: `pooja@loopledger.dev` / `Customer@1234!` (company: Singh Enterprises)
-- **Customer 2**: `amit@loopledger.dev` / `Customer@5678!` (company: Desai Technologies)
+- **Staff 1**: `staff1@loopledger.dev` / `Staff@1234!` (Priya Sharma, role: `staff`)
+- **Staff 2**: `staff2@loopledger.dev` / `Staff@5678!` (Rohit Verma, role: `staff`)
+- **Customer 1**: `pooja@loopledger.dev` / `Customer@1234!` (Pooja Singh, Singh Enterprises)
+- **Customer 2**: `amit@loopledger.dev` / `Customer@5678!` (Amit Desai, Desai Technologies)
 
 ---
 
-### 5. How to Run & Test
-```bash
-# 1. Seed demo database with all templates, quotes, subscriptions, and MRR history:
-cd backend
-npm run seed
+## Verification & Execution Commands
 
-# 2. Run backend test suite (55 passing tests across 8 suites):
+```bash
+# 1. Run all backend automated tests (13 suites, 108 tests):
+cd backend
 npm test
 
-# 3. Start backend:
-npm start
+# 2. Run the SLA performance benchmark suite:
+npm run benchmark
 
-# 4. In a separate terminal, start frontend:
-cd frontend
-npm run dev
+# 3. Seed demo database:
+npm run seed
+
+# 4. Generate high-volume scale data (10,000 subscriptions):
+npm run seed:bulk
+
+# 5. Build frontend production bundle:
+cd ../frontend
+npm run build
 ```
-
----
-
-### 6. Roadmap to Completion (Phases 5 – 9)
-1. **Phase 5: Billing Engine, Time Machine, Invoices – COMPLETED**:
-   - `services/billingPeriods.js` (unbilled periods catch-up).
-   - `services/billingEngine.js` with `BillingPeriod` unique index claim guard to guarantee zero double billing.
-   - `POST /api/billing/run` (dryRun, asOf).
-   - Invoice PDF generation (`PDFKit`) via `GET /api/invoices/:id/pdf`.
-   - Time Machine page (`TimeMachinePage.jsx`) and Invoice management UI (`InvoicesPage.jsx`, `InvoiceDetailPage.jsx`).
-2. **Phase 6: Payments, Reminders, Collections, Customer Portal u{2013} COMPLETED**:
-   - Payment processing service (`paymentProcessor.js`) with settlement, discount counters, refunds, mock webhook.
-   - Invoice controller (CRUD, PDF, send, confirm, cancel, status transitions).
-   - Reminder and dunning cron job (`jobs/paymentReminders.js`) with Ethereal mock emails and `ReminderLog`.
-   - Customer Portal invoice listing and payment flow (`PortalInvoices.jsx`, `PortalInvoiceDetail.jsx`).
-   - `PaymentMethodSelect` component, `CollectionsPage.jsx` admin view, `utils/mailer.js`.
-   - 3 new test suites: `payments.test.js`, `reminders.test.js`, `portalPayments.test.js`.
-   - **All 65 tests pass across 11 suites.** Frontend build verified with 0 errors.
-3. **Phase 7: Reports, MRR Waterfall, Dashboard, Advanced UI — COMPLETED**:
-   - Reports analytics service with MRR waterfall, revenue breakdown, churn analysis, dashboard KPIs.
-   - `GET /api/reports/summary` — live MRR, ARR, ARPU, LTV, churn rate, overdue, outstanding.
-   - `GET /api/reports/mrr-waterfall?months=N` — UTC-consistent monthly MRR trend.
-   - `GET /api/reports/revenue?months=N` — monthly collected revenue.
-   - `GET /api/reports/churn?months=N` — monthly new vs churned subscriptions.
-   - **ReportsPage.jsx**: 3-tab analytics (Waterfall, Revenue, Churn) with Recharts.
-   - **DashboardPage.jsx**: Live KPI cards (MRR, ARR, ARPU, LTV, Churn Rate).
-   - `tests/mrr.test.js`: **18 passing tests**.
-   - **All 83 tests pass across 12 suites.**
-4. **Phase 8: Scale & Seed (10k subscriptions benchmark), Stress Testing**:
-   - High-volume seed script (`npm run seed:bulk`) generating 10,000 subscriptions.
-   - Index verification and query performance profiling (< 200ms target).
-5. **Phase 9: Documentation, Packaging, Final QA**:
-   - Docker-compose end-to-end testing, clean Readme, end-to-end verification.

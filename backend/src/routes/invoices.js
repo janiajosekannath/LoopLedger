@@ -5,6 +5,8 @@
 const express = require('express');
 const router = express.Router();
 const invoiceController = require('../controllers/invoiceController');
+const paymentController = require('../controllers/paymentController');
+const collectionController = require('../controllers/collectionController');
 const { authenticate, authorize } = require('../middleware/auth');
 
 router.use(authenticate);
@@ -29,5 +31,20 @@ router.patch('/:id/cancel', authorize('admin', 'staff'), invoiceController.cance
 
 // Send invoice via email (admin, staff)
 router.post('/:id/send', authorize('admin', 'staff'), invoiceController.sendInvoice);
+
+// Send on-demand payment reminder for invoice (admin, staff)
+router.post('/:id/remind', authorize('admin', 'staff'), collectionController.remindInvoice);
+
+// Record payment against invoice: POST /api/invoices/:id/payments
+router.post('/:id/payments', (req, res, next) => {
+  req.params.invoiceId = req.params.id;
+  return paymentController.payInvoice(req, res, next);
+});
+
+// List payments for invoice: GET /api/invoices/:id/payments
+router.get('/:id/payments', (req, res, next) => {
+  req.query.invoice = req.params.id;
+  return paymentController.listPayments(req, res, next);
+});
 
 module.exports = router;

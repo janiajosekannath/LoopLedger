@@ -7,6 +7,7 @@ export const invoicesApi = {
   confirm: (id) => client.patch(`/invoices/${id}/confirm`),
   cancel: (id) => client.patch(`/invoices/${id}/cancel`),
   send: (id) => client.post(`/invoices/${id}/send`),
+  remind: (id) => client.post(`/invoices/${id}/remind`),
   pdf: (id) => client.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),
   // Payments
   pay: (invoiceId, data) => client.post(`/payments/${invoiceId}/pay`, data),
