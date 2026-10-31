@@ -43,52 +43,87 @@ Currency: INR (₹)
   - `POST /api/admin/staff`: admin-only endpoint to create staff members.
   - `GET /api/admin/staff`: admin-only paginated staff list with search.
   - `PATCH /api/admin/staff/:id/toggle`: admin-only staff activation toggle.
+  - `GET /api/health`: healthcheck endpoint.
 - **Frontend Core**:
   - Vite + React 18 + Tailwind CSS + React Router v6 + TanStack Query + Axios.
   - Design tokens: Indigo accent, slate sidebar, clean white/gray cards.
   - Core components: `DataTable`, `Pagination`, `Modal`, `ConfirmDialog`, `StatusBadge`, `StatCard`, `PageHeader`, `EmptyState`, `Spinner`, `FormField`, `SearchInput`, `Toast`, `Timeline`.
   - Layouts: `AdminLayout` (responsive with collapsible dark sidebar) and `PortalLayout` (customer scoped).
   - Auth Pages: `LoginPage`, `SignupPage` (live password criteria checklist), `ForgotPasswordPage`, `ResetPasswordPage`, `NotFoundPage`.
-  - Frontend builds with 0 errors via `npm run build`.
-- **Tests**:
-  - Jest + Supertest + MongoDB integration test suite in `backend/tests/auth.test.js`.
-  - **12/12 passing tests**:
-    1. 8-character password rejected
-    2. 9-character password accepted
-    3. Password missing uppercase rejected
-    4. Password missing special char rejected
-    5. Duplicate email returns 409
-    6. Staff cannot create another staff (403)
-    7. Customer blocked from admin routes (403)
-    8. Unauthenticated request blocked (401)
-    9. Admin can create staff (201)
-    10. Reset token is single-use only
-    11. Signup response does not leak passwordHash or resetTokenHash
-    12. Login response does not leak passwordHash or resetTokenHash
-- **Seed Script**:
-  - `backend/scripts/seed.js` seeded with 1 Admin, 2 Staff, and 10 realistic Indian customers (2 with portal logins).
 
 ---
 
-### 2. Files Created
-- `docker-compose.yml`, `.env.example`, `.gitignore`
-- `backend/package.json`, `backend/Dockerfile`
-- `backend/src/config/database.js`, `backend/src/config/mailer.js`
-- `backend/src/models/User.js`, `Customer.js`, `Product.js`, `SubscriptionPlan.js`, `Tax.js`, `Discount.js`, `Quotation.js`, `QuotationTemplate.js`, `Subscription.js`, `Invoice.js`, `Payment.js`, `Billing.js`, `History.js`
-- `backend/src/utils/money.js`, `sequence.js`, `asyncHandler.js`
-- `backend/src/middleware/errorHandler.js`, `auth.js`
-- `backend/src/controllers/authController.js`, `adminController.js`
-- `backend/src/routes/auth.js`, `admin.js`
-- `backend/src/app.js`, `server.js`
-- `backend/scripts/seed.js`
-- `backend/tests/auth.test.js`
-- `frontend/package.json`, `vite.config.js`, `tailwind.config.js`, `postcss.config.js`, `index.html`
-- `frontend/src/index.css`, `main.jsx`, `App.jsx`
-- `frontend/src/api/client.js`, `auth.js`
-- `frontend/src/context/AuthContext.jsx`, `ProtectedRoute.jsx`
-- `frontend/src/components/*` (13 reusable shared UI components)
-- `frontend/src/layouts/AdminLayout.jsx`, `PortalLayout.jsx`
-- `frontend/src/pages/*` (Auth pages + route stubs for Phase 2-7)
+## Phase 2: UI Shell, Shared Components, Customers, Staff — COMPLETED
+
+### 1. Done in Phase 2
+- **Backend Customers Module**:
+  - Full CRUD API at `/api/customers` with Zod validation and central error handling.
+  - Search across name, email, company, and phone with regex case-insensitive matching.
+  - Pagination with configurable `limit` (capped at 100) and `page`, returning standard `{ success, data, meta: { page, limit, total, totalPages } }`.
+  - Deletion business protection: deletes are strictly blocked (400 Bad Request) if linked subscriptions or invoices exist.
+  - Sub-resource endpoints:
+    - `GET /api/customers/:id/subscriptions` (with populated plans)
+    - `GET /api/customers/:id/invoices` (with populated subscription number)
+    - `GET /api/customers/:id/payments` (with populated invoice number and balance)
+  - Customer security isolation: customers can only view their own profile and sub-resources via their JWT `customerId`; accessing other customer IDs returns 403 Forbidden.
+- **Frontend Customers Module (`CustomersPage.jsx` & `CustomerDetailPage.jsx`)**:
+  - `CustomersPage`:
+    - Responsive DataTable with name initial avatars, email, company, phone, location (City, State), and registration dates.
+    - Live SearchInput and Pagination controls.
+    - Add and Edit Customer modal with full billing address fields and validation.
+    - Delete customer flow with `ConfirmDialog` and error toasts if customer has active records.
+    - Row-click navigation directly to detail view.
+  - `CustomerDetailPage`:
+    - Complete customer profile header with portal account status badge and full address display.
+    - Real-time stat summary cards: Total Subscriptions, Total Invoiced count, and Total Revenue Collected (₹).
+    - Three interactive tabs:
+      1. **Subscriptions**: list showing subscription number, plan, cycle, status badge, start/next billing dates, amount in ₹.
+      2. **Invoices**: list showing invoice number, issue date, due date, status badge (including overdue detection), total, balance due in ₹.
+      3. **Payments**: list showing payment number, linked invoice, method, amount paid in ₹, paid date, and notes.
+    - Inline Edit Customer profile modal.
+- **Staff Management (`StaffPage.jsx`)**:
+  - Admin-only access protected by `RoleRoute`.
+  - List of staff members with name, email, role, status badges, and registration dates.
+  - Search bar and pagination.
+  - "Add Staff Member" modal with strict password criteria validation checklist.
+  - One-click Activate / Deactivate toggle button hitting `PATCH /api/admin/staff/:id/toggle`.
+- **Dashboard Shell (`DashboardPage.jsx`)**:
+  - Six standard SaaS metric cards: Active Subscriptions, MRR (₹), ARR (₹), Total Revenue Collected (₹), Outstanding Payments (₹), and Overdue Invoices.
+  - Recent Customers live feed loaded dynamically from `/api/customers?limit=5`.
+  - Quick action buttons to navigate directly to Customer, Quotation, and Subscription flows.
+- **Seed Script Enhanced (`backend/scripts/seed.js`)**:
+  - Idempotent execution verified.
+  - Seeded 10 realistic Indian customer accounts across diverse states (Maharashtra, Karnataka, Haryana, Telangana, Tamil Nadu, Gujarat, Delhi, Rajasthan) with corporate entities (TechVista, Nexa Group, SoftCraft, InfraEdge, DataBridge, CloudPlex, BuildFast, FinEdge, Singh Enterprises, Desai Technologies).
+  - 2 customer accounts configured with portal access.
+- **Test Suite Expanded (`backend/tests/customer.test.js`)**:
+  - Comprehensive integration tests for customers API:
+    - Unauthenticated request rejected (401).
+    - Customer role blocked from listing all customers (403).
+    - Admin and staff can list and search customers.
+    - Pagination metadata verified.
+    - Valid customer creation and duplicate email rejection (409).
+    - Customer updates.
+    - Customer deletion blocked when subscriptions exist (400).
+    - Customer deletion succeeds when no dependencies exist (200).
+    - Customer role can access own sub-resources but is blocked (403) from accessing another customer's data.
+  - **All 24/24 Jest tests passing across both suites (`auth.test.js` & `customer.test.js`)**.
+  - Frontend production build succeeds with 0 errors via `npm run build`.
+
+---
+
+### 2. Files Created & Modified in Phase 2
+- `backend/src/controllers/customerController.js` (NEW)
+- `backend/src/routes/customers.js` (NEW)
+- `backend/src/app.js` (MODIFIED: mounted `/api/customers`)
+- `backend/tests/customer.test.js` (NEW)
+- `backend/scripts/seed.js` (MODIFIED: enhanced Indian customer locations and idempotency)
+- `frontend/src/api/customers.js` (NEW)
+- `frontend/src/api/staff.js` (NEW)
+- `frontend/src/pages/CustomersPage.jsx` (MODIFIED: full CRUD UI with search, modals, pagination)
+- `frontend/src/pages/CustomerDetailPage.jsx` (MODIFIED: profile, stats, Subscriptions/Invoices/Payments tabs)
+- `frontend/src/pages/StaffPage.jsx` (MODIFIED: full staff management with invite & status toggle)
+- `frontend/src/pages/DashboardPage.jsx` (MODIFIED: metric cards & recent customers live feed)
+- `.gitignore` (MODIFIED: ignore local mongo data/ and binaries)
 
 ---
 
@@ -103,6 +138,14 @@ Currency: INR (₹)
 | POST | `/api/admin/staff` | Admin | Create new staff user |
 | GET | `/api/admin/staff` | Admin | List staff members with pagination |
 | PATCH | `/api/admin/staff/:id/toggle` | Admin | Toggle staff active status |
+| GET | `/api/customers` | Admin, Staff | List customers with search, city/state filter & pagination |
+| POST | `/api/customers` | Admin, Staff | Create a new customer |
+| GET | `/api/customers/:id` | Admin, Staff, Customer (scoped) | Retrieve customer profile |
+| PUT | `/api/customers/:id` | Admin, Staff | Update customer profile |
+| DELETE | `/api/customers/:id` | Admin, Staff | Delete customer (blocked if subscriptions/invoices exist) |
+| GET | `/api/customers/:id/subscriptions` | Admin, Staff, Customer (scoped) | List customer's subscriptions |
+| GET | `/api/customers/:id/invoices` | Admin, Staff, Customer (scoped) | List customer's invoices |
+| GET | `/api/customers/:id/payments` | Admin, Staff, Customer (scoped) | List customer's payments |
 | GET | `/api/health` | Public | Healthcheck endpoint |
 
 ---
@@ -139,8 +182,8 @@ All demo passwords follow the strict policy (`>= 9 chars`, uppercase, lowercase,
 
 ### 5. How to Run & Test
 #### Prerequisites
-- Node.js 18+ (tested on Node 22.16)
-- MongoDB running locally on `localhost:27017` or via Docker: `docker compose up mongo -d`
+- Node.js 18+ (tested on Node 24.17)
+- Standalone MongoDB running locally on `localhost:27017` or via Docker: `docker compose up mongo -d`
 
 #### Step-by-Step
 1. **Configure Environment**:
@@ -150,13 +193,13 @@ All demo passwords follow the strict policy (`>= 9 chars`, uppercase, lowercase,
 2. **Run Backend**:
    ```bash
    cd backend
-   npm run seed    # Seeds demo admin, staff, and 10 customers
+   npm run seed    # Seeds demo admin, staff, and 10 realistic Indian customers
    npm start       # Runs on http://localhost:5000
    ```
 3. **Run Tests**:
    ```bash
    cd backend
-   npm test        # Runs all 12 Jest integration tests
+   npm test        # Runs all 24 Jest integration tests (auth.test.js & customer.test.js)
    ```
 4. **Run Frontend**:
    ```bash
@@ -166,8 +209,10 @@ All demo passwords follow the strict policy (`>= 9 chars`, uppercase, lowercase,
 5. **Test in Browser**:
    - Visit `http://localhost:5173/login`
    - Sign in as Admin (`admin@loopledger.dev` / `Admin@1234!`) -> Redirects to `/dashboard`
+   - In Sidebar, click **Customers** -> View customer list, search by name/company/email, click **Add Customer**
+   - Click any customer row -> View profile details, Subscriptions tab, Invoices tab, Payments tab
+   - In Sidebar, click **Staff** -> View staff members, invite a new staff member, test status toggle
    - Sign in as Customer (`pooja@loopledger.dev` / `Customer@1234!`) -> Redirects to `/portal`
-   - Visit `http://localhost:5173/signup` -> Test live password validation indicators
 
 ---
 
@@ -177,9 +222,12 @@ All demo passwords follow the strict policy (`>= 9 chars`, uppercase, lowercase,
 
 ---
 
-### 7. What is Next (Phase 2)
-The next team member will build **Phase 2: UI Shell, Shared Components, Customers, Staff**:
-- Implement full Customers CRUD with search (name, email, company, phone), filters, and pagination.
-- Customer detail page with profile and tabs for Subscriptions, Invoices, Payments (`/api/customers/:id/subscriptions`, `/invoices`, `/payments`).
-- Staff management page for Admin (list, create, activate/deactivate).
-- Connect real backend APIs for Customers (`/api/customers`) and Staff (`/api/admin/staff`).
+### 7. What is Next (Phase 3)
+The next phase is **Phase 3: Catalog, Plans, Taxes, Discounts**:
+- Admin writes, staff reads, customers none.
+- Taxes CRUD with active toggle (GST 18%, GST 5%, Exempt 0%).
+- Products CRUD (name, type, sales price, cost price, notes, default tax, archive), variants add and remove, search and filters, and price calculator (base ₹1,000 + Odoo +₹560 shows ₹1,560).
+- Plans CRUD with every field and flag (`autoClose`, `allowEarlyClose`, `allowPause`, `allowRenew`, `active`), availableTo after availableFrom validation, flag badges, filters.
+- Discounts (admin only to write): fixed or percent (0 to 100), minimum purchase, minimum quantity, dates, usage limit, scope product or subscription; backend validation; list shows computed status (active, scheduled, expired, exhausted) and used/limit.
+- Build `services/discountEligibility.js` with unit tests (expired, not started, exhausted, below minimum quantity, below minimum purchase).
+- Seed: 5 products with variants (including Business Software with Odoo +560), daily, weekly, monthly and yearly plans (one auto-close without pause, one with all flags on), taxes (GST 18%, GST 5%, Exempt 0%), discounts (10% at 10+ seats, fixed ₹500 above ₹5,000, one expired, one exhausted, one scheduled).

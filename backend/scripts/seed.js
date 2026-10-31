@@ -17,21 +17,85 @@ const DEMO_STAFF = [
   { email: 'staff2@loopledger.dev', password: 'Staff@5678!', name: 'Rohit Verma', role: 'staff' },
 ];
 const DEMO_CUSTOMERS = [
-  { name: 'Ananya Iyer', email: 'ananya@techvista.in', phone: '9876543210', company: 'TechVista Solutions' },
-  { name: 'Karan Mehta', email: 'karan@nexagroup.com', phone: '9876543211', company: 'Nexa Group' },
-  { name: 'Deepika Nair', email: 'deepika@softcraft.co', phone: '9876543212', company: 'SoftCraft Co' },
-  { name: 'Vikram Rao', email: 'vikram@infraedge.in', phone: '9876543213', company: 'InfraEdge India' },
-  { name: 'Sunita Pillai', email: 'sunita@databridge.io', phone: '9876543214', company: 'DataBridge IO' },
-  { name: 'Arjun Kapoor', email: 'arjun@cloudplex.net', phone: '9876543215', company: 'CloudPlex Networks' },
-  { name: 'Meera Joshi', email: 'meera@buildfast.in', phone: '9876543216', company: 'BuildFast India' },
-  { name: 'Rajesh Kumar', email: 'rajesh@finedge.co', phone: '9876543217', company: 'FinEdge Capital' },
+  {
+    name: 'Ananya Iyer',
+    email: 'ananya@techvista.in',
+    phone: '+91 98765 43210',
+    company: 'TechVista Solutions Pvt Ltd',
+    address: { line1: '14 Indiranagar 100ft Road', city: 'Bangalore', state: 'Karnataka', pincode: '560038', country: 'India' },
+  },
+  {
+    name: 'Karan Mehta',
+    email: 'karan@nexagroup.com',
+    phone: '+91 98765 43211',
+    company: 'Nexa Group India',
+    address: { line1: '45 Nariman Point', city: 'Mumbai', state: 'Maharashtra', pincode: '400021', country: 'India' },
+  },
+  {
+    name: 'Deepika Nair',
+    email: 'deepika@softcraft.co',
+    phone: '+91 98765 43212',
+    company: 'SoftCraft Technologies',
+    address: { line1: 'Sector 62 Phase 8', city: 'Gurgaon', state: 'Haryana', pincode: '122002', country: 'India' },
+  },
+  {
+    name: 'Vikram Rao',
+    email: 'vikram@infraedge.in',
+    phone: '+91 98765 43213',
+    company: 'InfraEdge Networks',
+    address: { line1: 'Plot 21 HITEC City', city: 'Hyderabad', state: 'Telangana', pincode: '500081', country: 'India' },
+  },
+  {
+    name: 'Sunita Pillai',
+    email: 'sunita@databridge.io',
+    phone: '+91 98765 43214',
+    company: 'DataBridge Analytics',
+    address: { line1: 'Old Mahabalipuram Rd Taramani', city: 'Chennai', state: 'Tamil Nadu', pincode: '600113', country: 'India' },
+  },
+  {
+    name: 'Arjun Kapoor',
+    email: 'arjun@cloudplex.net',
+    phone: '+91 98765 43215',
+    company: 'CloudPlex Infrastructure',
+    address: { line1: 'Viman Nagar IT Park', city: 'Pune', state: 'Maharashtra', pincode: '411014', country: 'India' },
+  },
+  {
+    name: 'Meera Joshi',
+    email: 'meera@buildfast.in',
+    phone: '+91 98765 43216',
+    company: 'BuildFast SaaS',
+    address: { line1: 'SG Highway Bodakdev', city: 'Ahmedabad', state: 'Gujarat', pincode: '380054', country: 'India' },
+  },
+  {
+    name: 'Rajesh Kumar',
+    email: 'rajesh@finedge.co',
+    phone: '+91 98765 43217',
+    company: 'FinEdge Capital Partners',
+    address: { line1: 'Barakhamba Road Connaught Place', city: 'New Delhi', state: 'Delhi', pincode: '110001', country: 'India' },
+  },
   // Two with customer portal logins
-  { name: 'Pooja Singh', email: 'pooja@loopledger.dev', phone: '9876543218', company: 'Singh Enterprises', hasLogin: true, password: 'Customer@1234!' },
-  { name: 'Amit Desai', email: 'amit@loopledger.dev', phone: '9876543219', company: 'Desai Technologies', hasLogin: true, password: 'Customer@5678!' },
+  {
+    name: 'Pooja Singh',
+    email: 'pooja@loopledger.dev',
+    phone: '+91 98765 43218',
+    company: 'Singh Enterprises',
+    address: { line1: 'MI Road Civil Lines', city: 'Jaipur', state: 'Rajasthan', pincode: '302001', country: 'India' },
+    hasLogin: true,
+    password: 'Customer@1234!',
+  },
+  {
+    name: 'Amit Desai',
+    email: 'amit@loopledger.dev',
+    phone: '+91 98765 43219',
+    company: 'Desai Technologies',
+    address: { line1: 'Kalyani Nagar', city: 'Pune', state: 'Maharashtra', pincode: '411006', country: 'India' },
+    hasLogin: true,
+    password: 'Customer@5678!',
+  },
 ];
 
 async function seedUsers() {
-  console.log('\n--- Seeding Users ---');
+  console.log('\n--- Seeding Users & Customers ---');
 
   // Admin
   const existingAdmin = await User.findOne({ email: DEMO_ADMIN.email });
@@ -57,19 +121,14 @@ async function seedUsers() {
 
   // Customers
   for (const c of DEMO_CUSTOMERS) {
-    const existingCustomer = await Customer.findOne({ email: c.email });
-    if (!existingCustomer) {
-      const customer = await Customer.create({
+    let customer = await Customer.findOne({ email: c.email });
+    if (!customer) {
+      customer = await Customer.create({
         name: c.name,
         email: c.email,
         phone: c.phone,
         company: c.company,
-        address: {
-          line1: '123 Business Park',
-          city: 'Mumbai',
-          state: 'Maharashtra',
-          pincode: '400001',
-        },
+        address: c.address,
       });
 
       if (c.hasLogin) {
@@ -88,7 +147,10 @@ async function seedUsers() {
         console.log(`Created customer: ${c.email}`);
       }
     } else {
-      console.log(`Customer already exists: ${c.email}`);
+      // Update address if missing or update
+      customer.address = c.address;
+      await customer.save();
+      console.log(`Customer updated: ${c.email}`);
     }
   }
 }
@@ -111,7 +173,7 @@ async function main() {
     console.log(`  Email: ${s.email}  Password: ${s.password}  Name: ${s.name}`);
   }
   console.log('\nCustomers with portal login:');
-  for (const c of DEMO_CUSTOMERS.filter(c => c.hasLogin)) {
+  for (const c of DEMO_CUSTOMERS.filter((c) => c.hasLogin)) {
     console.log(`  Email: ${c.email}  Password: ${c.password}  Name: ${c.name}`);
   }
   console.log('========================================\n');
